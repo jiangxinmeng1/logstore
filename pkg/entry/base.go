@@ -23,6 +23,16 @@ type Base struct {
 	err     error
 }
 
+type CheckpointInfo struct {
+	Group      string
+	Checkpoint *common.ClosedInterval
+}
+
+type CommitInfo struct {
+	Group    string
+	CommitId uint64
+}
+
 func GetBase() *Base {
 	b := _basePool.Get().(*Base)
 	b.wg.Add(1)

@@ -1,23 +1,43 @@
 package store
 
 import (
-	"logstore/pkg/common"
 	"logstore/pkg/entry"
-	"sync/atomic"
+	"sync"
 )
 
 type syncBase struct {
-	synced, syncing             uint64
-	checkpointed, checkpointing uint64
+	*sync.RWMutex
+	checkpointing, syncing map[string]uint64
+	checkpointed, synced   *syncMap
+}
+
+type syncMap struct {
+	*sync.RWMutex
+	ids map[string]uint64
+}
+
+func newSyncMap() *syncMap {
+	return &syncMap{
+		RWMutex: new(sync.RWMutex),
+		ids:     make(map[string]uint64),
+	}
+}
+func newSyncBase() *syncBase {
+	return &syncBase{
+		checkpointing: make(map[string]uint64),
+		syncing:       make(map[string]uint64),
+		checkpointed:  newSyncMap(),
+		synced:        newSyncMap(),
+	}
 }
 
 func (base *syncBase) OnEntryReceived(e entry.Entry) error {
 	if info := e.GetInfo(); info != nil {
 		switch v := info.(type) {
-		case uint64:
-			base.syncing = v
-		case *common.ClosedInterval:
-			base.checkpointing = v.End
+		case *entry.CommitInfo:
+			base.syncing[v.Group] = v.CommitId
+		case *entry.CheckpointInfo:
+			base.checkpointing[v.Group] = v.Checkpoint.End
 		default:
 			panic("not supported")
 		}
@@ -25,27 +45,42 @@ func (base *syncBase) OnEntryReceived(e entry.Entry) error {
 	return nil
 }
 
-func (base *syncBase) GetCheckpointed() uint64 {
-	return atomic.LoadUint64(&base.checkpointed)
+func (base *syncBase) GetCheckpointed(groupName string) uint64 {
+	base.checkpointed.RLock()
+	defer base.checkpointed.RUnlock()
+	return base.checkpointed.ids[groupName]
 }
 
-func (base *syncBase) SetCheckpointed(id uint64) {
-	atomic.StoreUint64(&base.checkpointed, id)
+func (base *syncBase) SetCheckpointed(groupName string, id uint64) {
+	base.checkpointed.Lock()
+	base.checkpointed.ids[groupName] = id
+	base.checkpointed.Unlock()
 }
 
-func (base *syncBase) GetSynced() uint64 {
-	return atomic.LoadUint64(&base.synced)
+func (base *syncBase) GetSynced(groupName string) uint64 {
+	base.synced.RLock()
+	defer base.synced.RUnlock()
+	return base.synced.ids[groupName]
 }
 
-func (base *syncBase) SetSynced(id uint64) {
-	atomic.StoreUint64(&base.synced, id)
+func (base *syncBase) SetSynced(groupName string, id uint64) {
+	base.synced.Lock()
+	base.synced.ids[groupName] = id
+	base.synced.Unlock()
 }
 
 func (base *syncBase) OnCommit() {
-	if base.checkpointing > base.checkpointed {
-		base.SetCheckpointed(base.checkpointing)
+	for group, checkpointingId := range base.checkpointing {
+		checkpointedId := base.GetCheckpointed(group)
+		if checkpointingId > checkpointedId {
+			base.SetCheckpointed(group, checkpointingId)
+		}
 	}
-	if base.syncing > base.synced {
-		base.SetSynced(base.syncing)
+
+	for group, syncingId := range base.syncing {
+		syncedId := base.GetSynced(group)
+		if syncingId > syncedId {
+			base.SetSynced(group, syncingId)
+		}
 	}
 }

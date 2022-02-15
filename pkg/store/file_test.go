@@ -3,6 +3,7 @@ package store
 import (
 	"bytes"
 	"logstore/pkg/common"
+	"logstore/pkg/entry"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -94,10 +95,20 @@ func TestAppender(t *testing.T) {
 		appender := rf.GetAppender()
 		assert.NotNil(t, appender)
 		if i%4 == 0 && i > 0 {
-			err = appender.Prepare(len(toWrite), &common.ClosedInterval{End: common.GetGlobalSeqNum()})
+			checkpointInfo := &entry.CheckpointInfo{
+				Group: "group1",
+				Checkpoint: &common.ClosedInterval{
+					End: common.GetGlobalSeqNum(),
+				},
+			}
+			err = appender.Prepare(len(toWrite), checkpointInfo)
 			assert.Nil(t, err)
 		} else {
-			err = appender.Prepare(len(toWrite), common.NextGlobalSeqNum())
+			commitInfo := &entry.CommitInfo{
+				Group:    "group1",
+				CommitId: common.NextGlobalSeqNum(),
+			}
+			err = appender.Prepare(len(toWrite), commitInfo)
 			assert.Nil(t, err)
 		}
 
@@ -134,16 +145,22 @@ func TestVInfo(t *testing.T) {
 	vinfo := *newVInfo()
 	end := 10
 	for i := 0; i <= end; i++ {
-		err := vinfo.LogCommit(uint64(i))
+		commitInfo := &entry.CommitInfo{Group: "group1", CommitId: uint64(i)}
+		err := vinfo.LogCommit(commitInfo)
 		assert.Nil(t, err)
 	}
-	assert.Equal(t, uint64(end), vinfo.commits.End)
-	err := vinfo.LogCommit(uint64(end + 2))
+	assert.Equal(t, uint64(end), vinfo.commits["group1"].End)
+	commitInfo := &entry.CommitInfo{Group: "group1", CommitId: uint64(end + 2)}
+	err := vinfo.LogCommit(commitInfo)
 	assert.NotNil(t, err)
 
-	err = vinfo.LogCheckpoint(common.ClosedInterval{
-		Start: 0,
-		End:   uint64(end / 2),
-	})
+	checkpointInfo := &entry.CheckpointInfo{
+		Group: "group1",
+		Checkpoint: &common.ClosedInterval{
+			Start: 0,
+			End:   uint64(end / 2),
+		},
+	}
+	err = vinfo.LogCheckpoint(checkpointInfo)
 	assert.Nil(t, err)
 }

@@ -25,9 +25,9 @@ type VFile interface {
 	Id() int
 	Name() string
 	String() string
-	InCheckpoint(*common.ClosedInterval) bool
-	InCommits(*common.ClosedInterval) bool
-	MergeCheckpoint(*common.ClosedInterval) *common.ClosedInterval
+	InCheckpoint(map[string]*common.ClosedInterval) bool
+	InCommits(map[string]*common.ClosedInterval) bool
+	MergeCheckpoint(*map[string]*common.ClosedInterval)
 }
 
 type FileAppender interface {

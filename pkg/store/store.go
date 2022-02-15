@@ -28,6 +28,7 @@ type baseStore struct {
 func NewBaseStore(dir, name string, cfg *StoreCfg) (*baseStore, error) {
 	var err error
 	bs := &baseStore{
+		syncBase:   *newSyncBase(),
 		dir:        dir,
 		name:       name,
 		flushQueue: make(chan entry.Entry, DefaultMaxBatchSize*100),

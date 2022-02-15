@@ -3,23 +3,30 @@ package store
 import (
 	"fmt"
 	"logstore/pkg/common"
+	"logstore/pkg/entry"
 )
 
 type vInfo struct {
-	commits     common.ClosedInterval
-	checkpoints []common.ClosedInterval
+	commits     map[string]*common.ClosedInterval
+	checkpoints map[string][]*common.ClosedInterval
 }
 
 func newVInfo() *vInfo {
 	return &vInfo{
-		checkpoints: make([]common.ClosedInterval, 0),
+		commits:     make(map[string]*common.ClosedInterval),
+		checkpoints: make(map[string][]*common.ClosedInterval),
 	}
 }
 
 func (info *vInfo) String() string {
-	s := fmt.Sprintf("(%s | ", info.commits.String())
-	for _, ckp := range info.checkpoints {
-		s = fmt.Sprintf("%s%s", s, ckp.String())
+	s := "("
+	for group, commit := range info.commits {
+		s = fmt.Sprintf("%s<%s>-[%s|", s, group, commit.String())
+		ckps := info.checkpoints[group]
+		for _, ckp := range ckps {
+			s = fmt.Sprintf("%s%s", s, ckp.String())
+		}
+		s = fmt.Sprintf("%s]", s)
 	}
 	s = fmt.Sprintf("%s)", s)
 	return s
@@ -30,26 +37,38 @@ func (info *vInfo) Log(v interface{}) error {
 		return nil
 	}
 	switch vi := v.(type) {
-	case uint64:
+	case *entry.CommitInfo:
 		return info.LogCommit(vi)
-	case *common.ClosedInterval:
-		return info.LogCheckpoint(*vi)
+	case *entry.CheckpointInfo:
+		return info.LogCheckpoint(vi)
 	}
 	panic("not supported")
 }
 
-func (info *vInfo) LogCommit(id uint64) error {
-	return info.commits.Append(id)
+func (info *vInfo) LogCommit(commitInfo *entry.CommitInfo) error {
+	_, ok := info.commits[commitInfo.Group]
+	if !ok {
+		info.commits[commitInfo.Group] = &common.ClosedInterval{}
+	}
+	return info.commits[commitInfo.Group].Append(commitInfo.CommitId)
 }
 
-func (info *vInfo) LogCheckpoint(interval common.ClosedInterval) error {
-	if len(info.checkpoints) == 0 {
-		info.checkpoints = append(info.checkpoints, interval)
+func (info *vInfo) LogCheckpoint(checkpointInfo *entry.CheckpointInfo) error {
+	ckps, ok := info.checkpoints[checkpointInfo.Group]
+	if !ok {
+		ckps = make([]*common.ClosedInterval, 0)
+		info.checkpoints[checkpointInfo.Group] = ckps
 		return nil
 	}
-	ok := info.checkpoints[len(info.checkpoints)-1].TryMerge(interval)
-	if !ok {
-		info.checkpoints = append(info.checkpoints, interval)
+	if len(ckps) == 0 {
+		ckps = append(ckps, checkpointInfo.Checkpoint)
+		info.checkpoints[checkpointInfo.Group] = ckps
+		return nil
 	}
+	ok = ckps[len(ckps)-1].TryMerge(*checkpointInfo.Checkpoint)
+	if !ok {
+		ckps = append(ckps, checkpointInfo.Checkpoint)
+	}
+	info.checkpoints[checkpointInfo.Group] = ckps
 	return nil
 }

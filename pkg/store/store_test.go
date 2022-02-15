@@ -37,7 +37,7 @@ func TestStore(t *testing.T) {
 			case e := <-ch:
 				err := e.WaitDone()
 				assert.Nil(t, err)
-				t.Logf("synced %d", s.GetSynced())
+				t.Logf("synced %d", s.GetSynced("group1"))
 				// t.Logf("checkpointed %d", s.GetCheckpointed())
 				fwg.Done()
 			}
@@ -54,9 +54,19 @@ func TestStore(t *testing.T) {
 		e := entry.GetBase()
 		e.SetType(entry.ETFlush)
 		if i%2 == 0 && i > 0 {
-			e.SetInfo(&common.ClosedInterval{End: common.GetGlobalSeqNum()})
+			checkpointInterval := &entry.CheckpointInfo{
+				Group: "group1",
+				Checkpoint: &common.ClosedInterval{
+					End: common.GetGlobalSeqNum(),
+				},
+			}
+			e.SetInfo(checkpointInterval)
 		} else {
-			e.SetInfo(common.NextGlobalSeqNum())
+			commitInterval := &entry.CommitInfo{
+				Group: "group1",
+				CommitId: common.NextGlobalSeqNum(),
+			}
+			e.SetInfo(commitInterval)
 		}
 		n := common.GPool.Alloc(uint64(len(buf)))
 		n.Buf = n.Buf[:len(buf)]
