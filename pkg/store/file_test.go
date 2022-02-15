@@ -2,9 +2,11 @@ package store
 
 import (
 	"bytes"
+	"io/ioutil"
 	"logstore/pkg/common"
 	"logstore/pkg/entry"
 	"os"
+	"path"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -149,7 +151,7 @@ func TestVInfo(t *testing.T) {
 		err := vinfo.LogCommit(commitInfo)
 		assert.Nil(t, err)
 	}
-	assert.Equal(t, uint64(end), vinfo.commits["group1"].End)
+	assert.Equal(t, uint64(end), vinfo.Commits["group1"].End)
 	commitInfo := &entry.CommitInfo{Group: "group1", CommitId: uint64(end + 2)}
 	err := vinfo.LogCommit(commitInfo)
 	assert.NotNil(t, err)
@@ -163,4 +165,80 @@ func TestVInfo(t *testing.T) {
 	}
 	err = vinfo.LogCheckpoint(checkpointInfo)
 	assert.Nil(t, err)
+}
+
+func TestReadVInfo(t *testing.T){
+	dir := "/tmp/testappender"
+	os.RemoveAll(dir)
+	name := "mock"
+	checker := &MaxSizeRotateChecker{
+		MaxSize: int(common.M) * 1,
+	}
+	rf, _ := OpenRotateFile(dir, name, nil, checker, nil)
+
+	var data bytes.Buffer
+	data.WriteString("helloworldhello1")
+	for i := 0; i < 32*2048-1; i++ {
+		data.WriteString("helloworldhello1")
+	}
+	toWrite := data.Bytes()
+
+	worker, _ := ants.NewPool(1)
+	pool, _ := ants.NewPool(5)
+	var wg sync.WaitGroup
+
+	total := 10
+	for i := 0; i < total; i++ {
+		appender := rf.GetAppender()
+		assert.NotNil(t, appender)
+		if i%4 == 0 && i > 0 {
+			checkpointInfo := &entry.CheckpointInfo{
+				Group: "group1",
+				Checkpoint: &common.ClosedInterval{
+					End: common.GetGlobalSeqNum(),
+				},
+			}
+			appender.Prepare(len(toWrite), checkpointInfo)
+		} else {
+			commitInfo := &entry.CommitInfo{
+				Group:    "group1",
+				CommitId: common.NextGlobalSeqNum(),
+			}
+			appender.Prepare(len(toWrite), commitInfo)
+		}
+
+		f := func(app FileAppender, idx int) func() {
+			return func() {
+				defer wg.Done()
+				app.Write(toWrite)
+				app.Commit()
+				app.Sync()
+				truncate := func() {
+					defer wg.Done()
+					rf.history.TryTruncate()
+				}
+				wg.Add(1)
+				worker.Submit(truncate)
+			}
+		}
+		wg.Add(1)
+		pool.Submit(f(appender, i))
+	}
+	wg.Wait()
+
+	rf.Close()
+
+	
+	
+	files, _ := ioutil.ReadDir(dir)
+	for _,file:=range files{
+		f, _ := os.OpenFile(path.Join(dir, file.Name()), os.O_RDWR|os.O_APPEND, os.ModePerm)
+		vf:=&vFile{
+			vInfo: *newVInfo(),
+			File: f,
+			size: int(file.Size()),
+		}
+		vf.ReadMeta(vf)
+	}
+
 }

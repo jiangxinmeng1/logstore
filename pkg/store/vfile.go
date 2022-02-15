@@ -2,6 +2,7 @@ package store
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"logstore/pkg/common"
 	"os"
@@ -10,6 +11,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 )
+
+var Metasize = 2
 
 type vFileState struct {
 	pos  int
@@ -48,7 +51,7 @@ func newVFile(mu *sync.RWMutex, name string, version int, history History) (*vFi
 }
 
 func (vf *vFile) InCommits(intervals map[string]*common.ClosedInterval) bool {
-	for group, commits := range vf.commits {
+	for group, commits := range vf.Commits {
 		interval, ok := intervals[group]
 		if !ok {
 			return false
@@ -61,7 +64,7 @@ func (vf *vFile) InCommits(intervals map[string]*common.ClosedInterval) bool {
 }
 
 func (vf *vFile) InCheckpoint(intervals map[string]*common.ClosedInterval) bool {
-	for group, ckps := range vf.checkpoints {
+	for group, ckps := range vf.Checkpoints {
 		interval, ok := intervals[group]
 		if !ok {
 			return false
@@ -77,20 +80,24 @@ func (vf *vFile) InCheckpoint(intervals map[string]*common.ClosedInterval) bool 
 
 // TODO: process multi checkpoints.
 func (vf *vFile) MergeCheckpoint(interval *map[string]*common.ClosedInterval) {
-	if len(vf.checkpoints) == 0 {
+	if len(vf.Checkpoints) == 0 {
 		return
 	}
 	if interval == nil {
 		ret := make(map[string]*common.ClosedInterval)
-		for group, ckps := range vf.checkpoints {
+		for group, ckps := range vf.Checkpoints {
 			ret[group] = ckps[0]
 		}
 		interval = &ret
 		return
 	}
-	for group, ckps := range vf.checkpoints {
-		if len(ckps)==0{
+	for group, ckps := range vf.Checkpoints {
+		if len(ckps) == 0 {
 			continue
+		}
+		_,ok:=(*interval)[group]
+		if !ok{
+			(*interval)[group]=&common.ClosedInterval{}
 		}
 		(*interval)[group].TryMerge(*ckps[0])
 	}
@@ -143,11 +150,23 @@ func (vf *vFile) FinishWrite() {
 func (vf *vFile) Commit() {
 	// fmt.Printf("Committing %s\n", vf.Name())
 	vf.wg.Wait()
+	vf.WriteMeta()
 	vf.Sync()
+	// fmt.Printf("sync-%s\n", vf.String())
 	vf.commitCond.L.Lock()
 	atomic.StoreInt32(&vf.committed, int32(1))
 	vf.commitCond.Broadcast()
 	vf.commitCond.L.Unlock()
+}
+
+func (vf *vFile) WriteMeta(){
+	buf := vf.MetatoBuf()
+	n, _ := vf.WriteAt(buf, int64(vf.size))
+	vf.size += n
+	buf = make([]byte, Metasize)
+	binary.BigEndian.PutUint16(buf, uint16(n))
+	n, _ = vf.WriteAt(buf, int64(vf.size))
+	vf.size += n
 }
 
 func (vf *vFile) WaitCommitted() {

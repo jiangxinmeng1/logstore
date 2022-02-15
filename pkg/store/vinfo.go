@@ -1,28 +1,76 @@
 package store
 
 import (
+	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"logstore/pkg/common"
 	"logstore/pkg/entry"
 )
 
 type vInfo struct {
-	commits     map[string]*common.ClosedInterval
-	checkpoints map[string][]*common.ClosedInterval
+	Commits     map[string]*common.ClosedInterval
+	Checkpoints map[string][]*common.ClosedInterval
 }
 
 func newVInfo() *vInfo {
 	return &vInfo{
-		commits:     make(map[string]*common.ClosedInterval),
-		checkpoints: make(map[string][]*common.ClosedInterval),
+		Commits:     make(map[string]*common.ClosedInterval),
+		Checkpoints: make(map[string][]*common.ClosedInterval),
 	}
 }
 
+//read meta (vfile)
+func (info *vInfo) ReadMeta(vf *vFile) {
+	buf := make([]byte, Metasize)
+	vf.ReadAt(buf, int64(vf.size)-int64(Metasize))
+	size := binary.BigEndian.Uint16(buf)
+	buf = make([]byte, int(size))
+	vf.ReadAt(buf, int64(vf.size)-int64(Metasize)-int64(size))
+	json.Unmarshal(buf, info)
+	// fmt.Printf("replay-%s\n", vf.String())
+}
+
+//meta to buf
+func (info *vInfo) MetatoBuf() []byte {
+	buf, _ := json.Marshal(info)
+	return buf
+}
+
+//for test or store, not safe
+func (info *vInfo) GetCommits(groupName string) (commits common.ClosedInterval) {
+	commits = *info.Commits[groupName]
+	return commits
+}
+
+//for test or store, not safe
+func (info *vInfo) GetCheckpoints(groupName string) (checkpoint []common.ClosedInterval) {
+	checkpoint = make([]common.ClosedInterval, 0)
+	for _, interval := range info.Checkpoints[groupName] {
+		checkpoint = append(checkpoint, *interval)
+	}
+	return checkpoint
+}
+
+//for test or store, not safe
 func (info *vInfo) String() string {
 	s := "("
-	for group, commit := range info.commits {
-		s = fmt.Sprintf("%s<%s>-[%s|", s, group, commit.String())
-		ckps := info.checkpoints[group]
+	groups := make(map[string]struct{})
+	for group := range info.Commits {
+		groups[group] = struct{}{}
+	}
+	for group := range info.Checkpoints {
+		groups[group] = struct{}{}
+	}
+	for group := range groups {
+		s = fmt.Sprintf("%s<%s>-[", s, group)
+		commit, ok := info.Commits[group]
+		if ok {
+			s = fmt.Sprintf("%s%s|", s,commit.String())
+		}else{
+			s = fmt.Sprintf("%sNone|", s)
+		}
+		ckps := info.Checkpoints[group]
 		for _, ckp := range ckps {
 			s = fmt.Sprintf("%s%s", s, ckp.String())
 		}
@@ -46,29 +94,30 @@ func (info *vInfo) Log(v interface{}) error {
 }
 
 func (info *vInfo) LogCommit(commitInfo *entry.CommitInfo) error {
-	_, ok := info.commits[commitInfo.Group]
+	_, ok := info.Commits[commitInfo.Group]
 	if !ok {
-		info.commits[commitInfo.Group] = &common.ClosedInterval{}
+		info.Commits[commitInfo.Group] = &common.ClosedInterval{}
 	}
-	return info.commits[commitInfo.Group].Append(commitInfo.CommitId)
+	return info.Commits[commitInfo.Group].Append(commitInfo.CommitId)
 }
 
 func (info *vInfo) LogCheckpoint(checkpointInfo *entry.CheckpointInfo) error {
-	ckps, ok := info.checkpoints[checkpointInfo.Group]
+	ckps, ok := info.Checkpoints[checkpointInfo.Group]
 	if !ok {
 		ckps = make([]*common.ClosedInterval, 0)
-		info.checkpoints[checkpointInfo.Group] = ckps
+		ckps = append(ckps, checkpointInfo.Checkpoint)
+		info.Checkpoints[checkpointInfo.Group] = ckps
 		return nil
 	}
 	if len(ckps) == 0 {
 		ckps = append(ckps, checkpointInfo.Checkpoint)
-		info.checkpoints[checkpointInfo.Group] = ckps
+		info.Checkpoints[checkpointInfo.Group] = ckps
 		return nil
 	}
 	ok = ckps[len(ckps)-1].TryMerge(*checkpointInfo.Checkpoint)
 	if !ok {
 		ckps = append(ckps, checkpointInfo.Checkpoint)
 	}
-	info.checkpoints[checkpointInfo.Group] = ckps
+	info.Checkpoints[checkpointInfo.Group] = ckps
 	return nil
 }

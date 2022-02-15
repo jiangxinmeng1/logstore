@@ -45,6 +45,12 @@ func (base *syncBase) OnEntryReceived(e entry.Entry) error {
 	return nil
 }
 
+func (base *syncBase) GetPenddings(groupName string) uint64 {
+	ckp := base.GetCheckpointed(groupName)
+	commit := base.GetSynced(groupName)
+	return commit - ckp
+}
+
 func (base *syncBase) GetCheckpointed(groupName string) uint64 {
 	base.checkpointed.RLock()
 	defer base.checkpointed.RUnlock()
