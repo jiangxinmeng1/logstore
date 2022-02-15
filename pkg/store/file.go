@@ -2,15 +2,39 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"logstore/pkg/common"
 	"os"
+	"path"
 	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 	"sync"
 )
 
+var suffix = ".rot"
+
 func MakeVersionFile(dir, name string, version uint64) string {
-	return fmt.Sprintf("%s-%d%s", filepath.Join(dir, name), version, ".rot")
+	return fmt.Sprintf("%s-%d%s", filepath.Join(dir, name), version, suffix)
+}
+
+func ParseVersion(name, prefix, suffix string) (int, error) {
+	woPrefix := strings.TrimPrefix(name, prefix+"-")
+	if len(woPrefix) == len(name) {
+		return 0, errors.New("parse version error")
+	}
+	strVersion := strings.TrimSuffix(woPrefix, suffix)
+	if len(strVersion) == len(woPrefix) {
+		return 0, errors.New("parse version error")
+	}
+	v, err := strconv.Atoi(strVersion)
+	if err != nil {
+		return 0, errors.New("parse version error")
+	}
+	return v, nil
 }
 
 type files struct {
@@ -38,21 +62,26 @@ type rotateFile struct {
 
 func OpenRotateFile(dir, name string, mu *sync.RWMutex, rotateChecker RotateChecker,
 	historyFactory HistoryFactory) (*rotateFile, error) {
+	var err error
 	if mu == nil {
 		mu = new(sync.RWMutex)
 	}
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
+	newDir := false
+	if _, err = os.Stat(dir); os.IsNotExist(err) {
 		err = os.MkdirAll(dir, 0755)
 		if err != nil {
 			return nil, err
 		}
+		newDir = true
 	}
+
 	if rotateChecker == nil {
 		rotateChecker = NewMaxSizeRotateChecker(DefaultRotateCheckerMaxSize)
 	}
 	if historyFactory == nil {
 		historyFactory = DefaultHistoryFactory
 	}
+
 	rf := &rotateFile{
 		RWMutex:     mu,
 		dir:         dir,
@@ -62,8 +91,39 @@ func OpenRotateFile(dir, name string, mu *sync.RWMutex, rotateChecker RotateChec
 		commitQueue: make(chan *vFile, 10000),
 		history:     historyFactory(),
 	}
+	if !newDir {
+		files, err := ioutil.ReadDir(dir)
+		if err != nil {
+			return nil, err
+		}
+		vfiles := make([]VFile, 0)
+		for _, f := range files {
+			version, err := ParseVersion(f.Name(), rf.name, suffix)
+			if err != nil {
+				fmt.Printf("err is %v\n", err)
+				continue
+			}
+			file, err := os.OpenFile(path.Join(dir, f.Name()), os.O_RDWR|os.O_APPEND, os.ModePerm)
+			if err != nil {
+				return nil, err
+			}
+			vf := &vFile{
+				File:    file,
+				version: version,
+				size:    int(f.Size()),
+			}
+			vf.ReadMeta(vf)
+			vfiles = append(vfiles, vf)
+		}
+		sort.Slice(vfiles, func(i, j int) bool {
+			return vfiles[i].(*vFile).version < vfiles[j].(*vFile).version
+		})
+		rf.history.Extend(vfiles[:len(vfiles)-1]...)
+		rf.uncommitted = append(rf.uncommitted, vfiles[len(vfiles)-1].(*vFile))
+	} else {
+		err = rf.scheduleNew()
+	}
 	rf.commitCtx, rf.commitCancel = context.WithCancel(context.Background())
-	err := rf.scheduleNew()
 	rf.wg.Add(1)
 	go rf.commitLoop()
 	return rf, err

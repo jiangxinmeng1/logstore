@@ -20,7 +20,6 @@ func newVInfo() *vInfo {
 	}
 }
 
-//read meta (vfile)
 func (info *vInfo) ReadMeta(vf *vFile) {
 	buf := make([]byte, Metasize)
 	vf.ReadAt(buf, int64(vf.size)-int64(Metasize))
@@ -28,22 +27,19 @@ func (info *vInfo) ReadMeta(vf *vFile) {
 	buf = make([]byte, int(size))
 	vf.ReadAt(buf, int64(vf.size)-int64(Metasize)-int64(size))
 	json.Unmarshal(buf, info)
-	// fmt.Printf("replay-%s\n", vf.String())
+	fmt.Printf("replay-%s\n", vf.String())
 }
 
-//meta to buf
 func (info *vInfo) MetatoBuf() []byte {
 	buf, _ := json.Marshal(info)
 	return buf
 }
 
-//for test or store, not safe
 func (info *vInfo) GetCommits(groupName string) (commits common.ClosedInterval) {
 	commits = *info.Commits[groupName]
 	return commits
 }
 
-//for test or store, not safe
 func (info *vInfo) GetCheckpoints(groupName string) (checkpoint []common.ClosedInterval) {
 	checkpoint = make([]common.ClosedInterval, 0)
 	for _, interval := range info.Checkpoints[groupName] {
@@ -52,7 +48,6 @@ func (info *vInfo) GetCheckpoints(groupName string) (checkpoint []common.ClosedI
 	return checkpoint
 }
 
-//for test or store, not safe
 func (info *vInfo) String() string {
 	s := "("
 	groups := make(map[string]struct{})

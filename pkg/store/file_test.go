@@ -2,11 +2,9 @@ package store
 
 import (
 	"bytes"
-	"io/ioutil"
 	"logstore/pkg/common"
 	"logstore/pkg/entry"
 	"os"
-	"path"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -228,17 +226,18 @@ func TestReadVInfo(t *testing.T){
 
 	rf.Close()
 
+	rf, _ = OpenRotateFile(dir, name, nil, checker, nil)
+	rf.Close()
 	
-	
-	files, _ := ioutil.ReadDir(dir)
-	for _,file:=range files{
-		f, _ := os.OpenFile(path.Join(dir, file.Name()), os.O_RDWR|os.O_APPEND, os.ModePerm)
-		vf:=&vFile{
-			vInfo: *newVInfo(),
-			File: f,
-			size: int(file.Size()),
-		}
-		vf.ReadMeta(vf)
-	}
+	// files, _ := ioutil.ReadDir(dir)
+	// for _,file:=range files{
+	// 	f, _ := os.OpenFile(path.Join(dir, file.Name()), os.O_RDWR|os.O_APPEND, os.ModePerm)
+	// 	vf:=&vFile{
+	// 		vInfo: *newVInfo(),
+	// 		File: f,
+	// 		size: int(file.Size()),
+	// 	}
+	// 	vf.ReadMeta(vf)
+	// }
 
 }
