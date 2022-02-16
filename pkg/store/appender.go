@@ -41,11 +41,15 @@ func (appender *fileAppender) Write(data []byte) (int, error) {
 }
 
 func (appender *fileAppender) Commit() error {
-	appender.rollbackState.file.FinishWrite()
+	err := appender.rollbackState.file.Log(appender.info)
+	if err != nil {
+		return err
+	}
 	if appender.info == nil {
 		return nil
 	}
-	return appender.rollbackState.file.Log(appender.info)
+	appender.rollbackState.file.FinishWrite()
+	return nil
 }
 
 func (appender *fileAppender) Rollback() {

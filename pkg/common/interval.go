@@ -26,6 +26,7 @@ func (i *ClosedInterval) Append(id uint64) error {
 		return nil
 	}
 	if id != i.End+1 {
+		fmt.Printf("invalid interval %v %v\n", i, id)
 		return IntervalInvalidErr
 	}
 	i.End = id

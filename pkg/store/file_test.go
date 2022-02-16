@@ -71,7 +71,7 @@ func TestAppender(t *testing.T) {
 	toWrite := data.Bytes()
 
 	worker, _ := ants.NewPool(1)
-	pool, _ := ants.NewPool(5)
+	pool, _ := ants.NewPool(1)
 	var wg sync.WaitGroup
 
 	now := time.Now()
@@ -182,7 +182,7 @@ func TestReadVInfo(t *testing.T){
 	toWrite := data.Bytes()
 
 	worker, _ := ants.NewPool(1)
-	pool, _ := ants.NewPool(5)
+	pool, _ := ants.NewPool(1)
 	var wg sync.WaitGroup
 
 	total := 10
