@@ -214,6 +214,7 @@ func (info *vInfo) Log(v interface{}) error {
 	if v == nil {
 		return nil
 	}
+	fmt.Printf("v is %v\n", v)
 	switch vi := v.(type) {
 	case *entry.CommitInfo:
 		return info.LogCommit(vi)

@@ -67,7 +67,7 @@ func (sm *stateMachine) onEntries(items ...interface{}) {
 		if err != nil {
 			panic(err)
 		}
-		visible := pending.entry.GetInfo().(uint64)
+		visible := pending.entry.GetInfo().(*entry.CommitInfo).CommitId
 		pending.Done()
 		atomic.StoreUint64(&sm.visible, visible)
 		if visible >= sm.lastCkp+1000 {
@@ -108,9 +108,13 @@ func (sm *stateMachine) checkpoint(_ ...interface{}) {
 	e := entry.GetBase()
 	defer e.Free()
 	e.SetType(entry.ETCheckpoint)
-	e.SetInfo(&common.ClosedInterval{
-		End: sm.VisibleLSN(),
-	})
+	ckpInfo := &entry.CheckpointInfo{
+		Group: "g1",
+		Checkpoint: &common.ClosedInterval{
+			End: sm.VisibleLSN(),
+		},
+	}
+	e.SetInfo(ckpInfo)
 	err := sm.wal.AppendEntry(e)
 	if err != nil {
 		return
