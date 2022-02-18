@@ -105,7 +105,7 @@ func (vf *vFile) MergeCheckpoint(interval *map[string]*common.ClosedInterval) {
 
 func (vf *vFile) String() string {
 	var w bytes.Buffer
-	w.WriteString(fmt.Sprintf("[%s]%s", vf.Name(), vf.vInfo.String()))
+	w.WriteString(fmt.Sprintf("[%s]\n%s", vf.Name(), vf.vInfo.String()))
 	return w.String()
 }
 
@@ -152,7 +152,7 @@ func (vf *vFile) Commit() {
 	vf.wg.Wait()
 	vf.WriteMeta()
 	vf.Sync()
-	// fmt.Printf("sync-%s\n", vf.String())
+	fmt.Printf("sync-%s\n", vf.String())
 	vf.commitCond.L.Lock()
 	atomic.StoreInt32(&vf.committed, int32(1))
 	vf.commitCond.Broadcast()

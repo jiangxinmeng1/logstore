@@ -33,6 +33,18 @@ type CommitInfo struct {
 	CommitId uint64
 }
 
+type UncommitInfo struct {
+	Group string
+	Tid   uint64
+	Addr  interface{}
+}
+
+type TxnInfo struct {
+	Group    string
+	Tid      uint64
+	CommitId uint64
+}
+
 func GetBase() *Base {
 	b := _basePool.Get().(*Base)
 	b.wg.Add(1)

@@ -128,6 +128,7 @@ type entryWrapper struct {
 func (h *history) TryTruncate() error {
 	gIntervals := make(map[string]*common.ClosedInterval)
 	toDelete := make([]entryWrapper, 0, 4)
+	tidCidMap := make(map[string]map[uint64]uint64)
 	h.mu.RLock()
 	entries := make([]VFile, len(h.entries))
 	for i, entry := range h.entries {
@@ -137,7 +138,8 @@ func (h *history) TryTruncate() error {
 	for i := len(entries) - 1; i >= 0; i-- {
 		e := entries[i]
 		wrapper := entryWrapper{entry: e}
-		if e.InCommits(gIntervals) && e.InCheckpoint(gIntervals) {
+		e.MergeTidCidMap(tidCidMap)
+		if e.InCommits(gIntervals) && e.InCheckpoint(gIntervals) && e.InTxnCommits(tidCidMap, gIntervals) {
 			wrapper.offset = i
 			toDelete = append(toDelete, wrapper)
 			continue

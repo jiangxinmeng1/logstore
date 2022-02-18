@@ -27,7 +27,9 @@ type VFile interface {
 	String() string
 	InCheckpoint(map[string]*common.ClosedInterval) bool
 	InCommits(map[string]*common.ClosedInterval) bool
+	InTxnCommits(map[string]map[uint64]uint64, map[string]*common.ClosedInterval) bool
 	MergeCheckpoint(*map[string]*common.ClosedInterval)
+	MergeTidCidMap(map[string]map[uint64]uint64)
 }
 
 type FileAppender interface {

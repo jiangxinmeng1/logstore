@@ -73,10 +73,48 @@ func (bs *baseStore) flushLoop() {
 	}
 }
 
+func (bs *baseStore) PrepareEntry(e entry.Entry) (entry.Entry, error) {
+	etype := e.GetType()
+	switch etype {
+	case entry.ETUncommitted:
+		info := entry.GetBase().GetInfo().(entry.UncommitInfo)
+		addr := bs.GetLastAddr(info.Group, info.Tid)
+		buf, err := addr.Marshal()
+		if err != nil {
+			return nil, err
+		}
+		payload := e.GetPayload()
+		payload = append(payload, buf...)
+		err = e.Unmarshal(payload)
+		if err != nil {
+			return nil, err
+		}
+	case entry.ETTxn:
+		info := entry.GetBase().GetInfo().(entry.TxnInfo)
+		addr := bs.GetLastAddr(info.Group, info.Tid)
+		buf, err := addr.Marshal()
+		if err != nil {
+			return nil, err
+		}
+		payload := e.GetPayload()
+		payload = append(payload, buf...)
+		err = e.Unmarshal(payload)
+		if err != nil {
+			return nil, err
+		}
+	default:
+	}
+	return e, nil
+}
+
 func (bs *baseStore) onEntries(entries []entry.Entry) {
 	var err error
 	// fmt.Printf("entries %d\n", len(entries))
 	for _, e := range entries {
+		e, err = bs.PrepareEntry(e)
+		if err != nil {
+			panic(err)
+		}
 		appender := bs.file.GetAppender()
 		if err = appender.Prepare(e.TotalSize(), e.GetInfo()); err != nil {
 			panic(err)

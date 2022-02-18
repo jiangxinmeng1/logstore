@@ -1,5 +1,9 @@
 package store
 
+import (
+	"logstore/pkg/entry"
+)
+
 type fileAppender struct {
 	rfile         *rotateFile
 	activeId      uint64
@@ -24,6 +28,11 @@ func (appender *fileAppender) Prepare(size int, info interface{}) error {
 	defer appender.rfile.Unlock()
 	if appender.syncWaited, appender.rollbackState, err = appender.rfile.makeSpace(size); err != nil {
 		return err
+	}
+	switch v := info.(type) {
+	case *entry.UncommitInfo:
+		v.Addr = &VFileAddress{FileName: appender.rollbackState.file.Name(), Offset: appender.rollbackState.pos}
+	default:
 	}
 	appender.info = info
 	// appender.activeId = appender.rfile.idAlloc.Alloc()

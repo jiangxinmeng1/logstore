@@ -9,6 +9,7 @@ type syncBase struct {
 	*sync.RWMutex
 	checkpointing, syncing map[string]uint64
 	checkpointed, synced   *syncMap
+	uncommits              map[string]map[uint64]*VFileAddress
 }
 
 type syncMap struct {
@@ -28,7 +29,16 @@ func newSyncBase() *syncBase {
 		syncing:       make(map[string]uint64),
 		checkpointed:  newSyncMap(),
 		synced:        newSyncMap(),
+		uncommits: make(map[string]map[uint64]*VFileAddress),
 	}
+}
+
+func (base *syncBase) GetLastAddr(groupName string, tid uint64) *VFileAddress {
+	tidMap, ok := base.uncommits[groupName]
+	if !ok {
+		return nil
+	}
+	return tidMap[tid]
 }
 
 func (base *syncBase) OnEntryReceived(e entry.Entry) error {
@@ -38,6 +48,25 @@ func (base *syncBase) OnEntryReceived(e entry.Entry) error {
 			base.syncing[v.Group] = v.CommitId
 		case *entry.CheckpointInfo:
 			base.checkpointing[v.Group] = v.Checkpoint.End
+		case *entry.UncommitInfo:
+			addr := v.Addr.(*VFileAddress)
+			tidMap, ok := base.uncommits[v.Group]
+			if !ok {
+				tidMap = make(map[uint64]*VFileAddress)
+			}
+			tidMap[v.Tid] = addr
+			base.uncommits[v.Group] = tidMap
+		case *entry.TxnInfo:
+			base.syncing[v.Group] = v.CommitId
+			tidMap,ok:=base.uncommits[v.Group]
+			if !ok{
+				return nil
+			}
+			_,ok=tidMap[v.Tid]
+			if !ok{
+				return nil
+			}
+			delete(tidMap,v.Tid)
 		default:
 			panic("not supported")
 		}

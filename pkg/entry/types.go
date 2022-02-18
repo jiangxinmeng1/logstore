@@ -12,6 +12,8 @@ const (
 	ETNoop
 	ETFlush
 	ETCheckpoint
+	ETUncommitted
+	ETTxn
 	ETCustomizedStart
 )
 
