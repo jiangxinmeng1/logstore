@@ -250,8 +250,8 @@ func (info *vInfo) LogUncommitInfo(uncommitInfo *entry.UncommitInfo) error {
 				tids = make([]uint64, 0)
 				info.UncommitTxn[group] = tids
 			}
-			for _, tid := range tids {
-				if tid == tid {
+			for _, infoTid := range tids {
+				if infoTid == tid {
 					return nil
 				}
 			}
