@@ -34,8 +34,9 @@ type CommitInfo struct {
 }
 
 type UncommitInfo struct {
-	Group string
-	Tid   uint64
+	// Group string
+	// Tid   uint64
+	Tids  map[string][]uint64
 	Addr  interface{}
 }
 

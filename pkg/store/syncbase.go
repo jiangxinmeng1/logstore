@@ -29,7 +29,7 @@ func newSyncBase() *syncBase {
 		syncing:       make(map[string]uint64),
 		checkpointed:  newSyncMap(),
 		synced:        newSyncMap(),
-		uncommits: make(map[string]map[uint64]*VFileAddress),
+		uncommits:     make(map[string]map[uint64]*VFileAddress),
 	}
 }
 
@@ -50,23 +50,27 @@ func (base *syncBase) OnEntryReceived(e entry.Entry) error {
 			base.checkpointing[v.Group] = v.Checkpoint.End
 		case *entry.UncommitInfo:
 			addr := v.Addr.(*VFileAddress)
-			tidMap, ok := base.uncommits[v.Group]
-			if !ok {
-				tidMap = make(map[uint64]*VFileAddress)
+			for group, tids := range v.Tids {
+				for _, tid := range tids {
+					tidMap, ok := base.uncommits[group]
+					if !ok {
+						tidMap = make(map[uint64]*VFileAddress)
+					}
+					tidMap[tid] = addr
+					base.uncommits[group] = tidMap
+				}
 			}
-			tidMap[v.Tid] = addr
-			base.uncommits[v.Group] = tidMap
 		case *entry.TxnInfo:
 			base.syncing[v.Group] = v.CommitId
-			tidMap,ok:=base.uncommits[v.Group]
-			if !ok{
+			tidMap, ok := base.uncommits[v.Group]
+			if !ok {
 				return nil
 			}
-			_,ok=tidMap[v.Tid]
-			if !ok{
+			_, ok = tidMap[v.Tid]
+			if !ok {
 				return nil
 			}
-			delete(tidMap,v.Tid)
+			delete(tidMap, v.Tid)
 		default:
 			panic("not supported")
 		}

@@ -214,7 +214,6 @@ func (info *vInfo) Log(v interface{}) error {
 	if v == nil {
 		return nil
 	}
-	fmt.Printf("v is %v\n", v)
 	switch vi := v.(type) {
 	case *entry.CommitInfo:
 		return info.LogCommit(vi)
@@ -244,18 +243,22 @@ func (info *vInfo) LogTxnInfo(txnInfo *entry.TxnInfo) error {
 }
 
 func (info *vInfo) LogUncommitInfo(uncommitInfo *entry.UncommitInfo) error {
-	tids, ok := info.UncommitTxn[uncommitInfo.Group]
-	if !ok {
-		tids = make([]uint64, 0)
-		info.UncommitTxn[uncommitInfo.Group] = tids
-	}
-	for _, tid := range tids {
-		if tid == uncommitInfo.Tid {
-			return nil
+	for group, tids := range uncommitInfo.Tids {
+		for _, tid := range tids {
+			tids, ok := info.UncommitTxn[group]
+			if !ok {
+				tids = make([]uint64, 0)
+				info.UncommitTxn[group] = tids
+			}
+			for _, tid := range tids {
+				if tid == tid {
+					return nil
+				}
+			}
+			tids = append(tids, tid)
+			info.UncommitTxn[group] = tids
 		}
 	}
-	tids = append(tids, uncommitInfo.Tid)
-	info.UncommitTxn[uncommitInfo.Group] = tids
 	return nil
 }
 

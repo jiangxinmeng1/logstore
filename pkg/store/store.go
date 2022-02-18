@@ -78,16 +78,21 @@ func (bs *baseStore) PrepareEntry(e entry.Entry) (entry.Entry, error) {
 	switch etype {
 	case entry.ETUncommitted:
 		info := entry.GetBase().GetInfo().(entry.UncommitInfo)
-		addr := bs.GetLastAddr(info.Group, info.Tid)
-		buf, err := addr.Marshal()
-		if err != nil {
-			return nil, err
-		}
-		payload := e.GetPayload()
-		payload = append(payload, buf...)
-		err = e.Unmarshal(payload)
-		if err != nil {
-			return nil, err
+		for group, tids := range info.Tids {
+			for _, tid := range tids {
+				addr := bs.GetLastAddr(group, tid)
+				buf, err := addr.Marshal()
+				if err != nil {
+					return nil, err
+				}
+				payload := e.GetPayload()
+				payload = append(payload, buf...)
+				err = e.Unmarshal(payload)
+				if err != nil {
+					return nil, err
+				}
+
+			}
 		}
 	case entry.ETTxn:
 		info := entry.GetBase().GetInfo().(entry.TxnInfo)
