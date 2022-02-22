@@ -56,7 +56,6 @@ func TestStore(t *testing.T) {
 	cnt := 5
 	for i := 0; i < cnt; i++ {
 		e := entry.GetBase()
-		e.SetType(entry.ETFlush)
 		if i%2 == 0 && i > 0 {
 			checkpointInterval := &entry.CheckpointInfo{
 				Group: "group1",
@@ -65,12 +64,14 @@ func TestStore(t *testing.T) {
 				},
 			}
 			e.SetInfo(checkpointInterval)
+			e.SetType(entry.ETCheckpoint)
 		} else {
 			commitInterval := &entry.CommitInfo{
 				Group:    "group1",
 				CommitId: common.NextGlobalSeqNum(),
 			}
 			e.SetInfo(commitInterval)
+			e.SetType(entry.ETCustomizedStart)
 		}
 		n := common.GPool.Alloc(uint64(len(buf)))
 		n.Buf = n.Buf[:len(buf)]
@@ -142,7 +143,6 @@ func TestMultiGroup(t *testing.T) {
 			ckp := uint64(0)
 			for i := 0; i < entryPerGroup; i++ {
 				e := entry.GetBase()
-				e.SetType(entry.ETFlush)
 				if i%1000 == 0 && i > 0 {
 					checkpointInterval := &entry.CheckpointInfo{
 						Group: groupName,
@@ -153,12 +153,14 @@ func TestMultiGroup(t *testing.T) {
 					}
 					ckp = checkpointInterval.Checkpoint.End + 1
 					e.SetInfo(checkpointInterval)
+					e.SetType(entry.ETCheckpoint)
 				} else {
 					commitInterval := &entry.CommitInfo{
 						Group:    groupName,
 						CommitId: alloc.Alloc(),
 					}
 					e.SetInfo(commitInterval)
+					e.SetType(entry.ETCustomizedStart)
 				}
 				n := common.GPool.Alloc(uint64(len(buf)))
 				n.Buf = n.Buf[:len(buf)]
@@ -236,7 +238,6 @@ func TestUncommitEntry(t *testing.T) {
 			ckp := uint64(0)
 			for i := 0; i < entryPerGroup; i++ {
 				e := entry.GetBase()
-				e.SetType(entry.ETFlush)
 				switch i % 100 {
 				case 1, 2, 3, 4, 5:
 					tids := make(map[string][]uint64)
@@ -245,6 +246,7 @@ func TestUncommitEntry(t *testing.T) {
 					uncommitInfo := &entry.UncommitInfo{
 						Tids: tids,
 					}
+					e.SetType(entry.ETUncommitted)
 					e.SetInfo(uncommitInfo)
 				case 99:
 					checkpointInterval := &entry.CheckpointInfo{
@@ -255,6 +257,7 @@ func TestUncommitEntry(t *testing.T) {
 						},
 					}
 					ckp = checkpointInterval.Checkpoint.End
+					e.SetType(entry.ETCheckpoint)
 					e.SetInfo(checkpointInterval)
 				case 50, 51, 52, 53:
 					txnInfo := &entry.TxnInfo{
@@ -262,12 +265,14 @@ func TestUncommitEntry(t *testing.T) {
 						Tid:      tidAlloc.Alloc(),
 						CommitId: cidAlloc.Alloc(),
 					}
+					e.SetType(entry.ETTxn)
 					e.SetInfo(txnInfo)
 				default:
 					commitInterval := &entry.CommitInfo{
 						Group:    groupName,
 						CommitId: cidAlloc.Alloc(),
 					}
+					e.SetType(entry.ETCustomizedStart)
 					e.SetInfo(commitInterval)
 				}
 				n := common.GPool.Alloc(uint64(len(buf)))
@@ -353,7 +358,7 @@ func TestReplay(t *testing.T) {
 					uncommitInfo := &entry.UncommitInfo{
 						Tids: tids,
 					}
-					fmt.Printf("%s",uncommitInfo.ToString())
+					fmt.Printf("%s", uncommitInfo.ToString())
 					e.SetInfo(uncommitInfo)
 					str := uncommitInfo.ToString()
 					buf := []byte(str)
@@ -362,7 +367,7 @@ func TestReplay(t *testing.T) {
 					copy(n.GetBuf(), buf)
 					e.UnmarshalFromNode(n, true)
 				case 49: //ckp entry
-				e.SetType(entry.ETCheckpoint)
+					e.SetType(entry.ETCheckpoint)
 					checkpointInterval := &entry.CheckpointInfo{
 						Group: groupName,
 						Checkpoint: &common.ClosedInterval{
@@ -379,7 +384,7 @@ func TestReplay(t *testing.T) {
 					copy(n.GetBuf(), buf)
 					e.UnmarshalFromNode(n, true)
 				case 20, 21, 22, 23: //txn entry
-				e.SetType(entry.ETTxn)
+					e.SetType(entry.ETTxn)
 					txnInfo := &entry.TxnInfo{
 						Group:    groupName,
 						Tid:      tidAlloc.Alloc(),
@@ -393,7 +398,7 @@ func TestReplay(t *testing.T) {
 					copy(n.GetBuf(), buf)
 					e.UnmarshalFromNode(n, true)
 				default: //commit entry
-				e.SetType(entry.ETCustomizedStart)
+					e.SetType(entry.ETCustomizedStart)
 					commitInterval := &entry.CommitInfo{
 						Group:    groupName,
 						CommitId: cidAlloc.Alloc(),
