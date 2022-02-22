@@ -1,6 +1,7 @@
 package entry
 
 import (
+	"fmt"
 	"io"
 	"logstore/pkg/common"
 	"sync"
@@ -19,6 +20,7 @@ type Base struct {
 	node    *common.MemNode
 	payload []byte
 	info    interface{}
+	infobuf []byte
 	wg      sync.WaitGroup
 	err     error
 }
@@ -28,22 +30,37 @@ type CheckpointInfo struct {
 	Checkpoint *common.ClosedInterval
 }
 
+func (info *CheckpointInfo) ToString() string {
+	return fmt.Sprintf("checkpoint entry <%s>-%s\n", info.Group, info.Checkpoint)
+}
+
 type CommitInfo struct {
 	Group    string
 	CommitId uint64
 }
 
+func (info *CommitInfo) ToString() string {
+	return fmt.Sprintf("commit entry <%s>-%d\n", info.Group, info.CommitId)
+}
+
 type UncommitInfo struct {
-	// Group string
-	// Tid   uint64
-	Tids  map[string][]uint64
-	Addr  interface{}
+	Tids map[string][]uint64
+	Addr interface{}
+}
+
+func (info *UncommitInfo) ToString() string {
+	return fmt.Sprintf("uncommit entry %v\n", info.Tids)
 }
 
 type TxnInfo struct {
 	Group    string
 	Tid      uint64
 	CommitId uint64
+	Addr     interface{}
+}
+
+func (info *TxnInfo) ToString() string {
+	return fmt.Sprintf("txn entry <%s> %d-%d\n", info.Group, info.Tid, info.CommitId)
 }
 
 func GetBase() *Base {
@@ -64,6 +81,12 @@ func (b *Base) reset() {
 	b.err = nil
 }
 
+func (b *Base) GetInfoBuf() []byte {
+	return b.infobuf
+}
+func (b *Base) SetInfoBuf(buf []byte) {
+	b.infobuf = buf
+}
 func (b *Base) GetError() error {
 	return b.err
 }
@@ -128,7 +151,17 @@ func (b *Base) ReadFrom(r io.Reader) (int, error) {
 		b.node = common.GPool.Alloc(uint64(b.GetPayloadSize()))
 		b.payload = b.node.Buf[:b.GetPayloadSize()]
 	}
-	return r.Read(b.payload)
+	infoBuf := make([]byte, b.GetInfoSize())
+	n1, err := r.Read(infoBuf)
+	if err != nil {
+		return n1, err
+	}
+	b.SetInfoBuf(infoBuf)
+	n2, err := r.Read(b.payload)
+	if err != nil {
+		return n2, err
+	}
+	return n1 + n2, nil
 }
 
 func (b *Base) WriteTo(w io.Writer) (int, error) {
@@ -136,9 +169,13 @@ func (b *Base) WriteTo(w io.Writer) (int, error) {
 	if err != nil {
 		return n1, err
 	}
-	n2, err := w.Write(b.payload)
+	n2, err := w.Write(b.GetInfoBuf())
 	if err != nil {
 		return n2, err
 	}
-	return n1 + n2, err
+	n3, err := w.Write(b.payload)
+	if err != nil {
+		return n3, err
+	}
+	return n1 + n2 + n3, err
 }

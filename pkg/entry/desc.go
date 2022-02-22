@@ -7,9 +7,12 @@ import (
 )
 
 const (
-	DescriptorSize = int(unsafe.Sizeof(ETInvalid) + unsafe.Sizeof(uint32(0)))
+	PayloadSizeOffset = int(unsafe.Sizeof(ETInvalid))
+	InfoSizeOffset    = int(unsafe.Sizeof(ETInvalid) + unsafe.Sizeof(uint32(0)))
+	DescriptorSize    = int(unsafe.Sizeof(ETInvalid) + 2*unsafe.Sizeof(uint32(0)))
 )
 
+//type, payloadsize, infosize
 type descriptor struct {
 	descBuf []byte
 }
@@ -33,12 +36,17 @@ func (desc *descriptor) SetType(t Type) {
 }
 
 func (desc *descriptor) SetPayloadSize(size int) {
-	binary.BigEndian.PutUint32(desc.descBuf[unsafe.Sizeof(ETInvalid):], uint32(size))
+	binary.BigEndian.PutUint32(desc.descBuf[PayloadSizeOffset:], uint32(size))
+}
+
+func (desc *descriptor) SetInfoSize(size int) {
+	binary.BigEndian.PutUint32(desc.descBuf[InfoSizeOffset:], uint32(size))
 }
 
 func (desc *descriptor) reset() {
 	desc.SetType(ETInvalid)
 	desc.SetPayloadSize(0)
+	desc.SetInfoSize(0)
 }
 
 func (desc *descriptor) GetMetaBuf() []byte {
@@ -50,17 +58,25 @@ func (desc *descriptor) GetType() Type {
 }
 
 func (desc *descriptor) GetPayloadSize() int {
-	return int(binary.BigEndian.Uint32(desc.descBuf[unsafe.Sizeof(ETInvalid):]))
+	return int(binary.BigEndian.Uint32(desc.descBuf[PayloadSizeOffset:]))
+}
+
+func (desc *descriptor) GetInfoSize() int {
+	return int(binary.BigEndian.Uint32(desc.descBuf[InfoSizeOffset:]))
 }
 
 func (desc *descriptor) TotalSize() int {
-	return DescriptorSize + desc.GetPayloadSize()
+	return DescriptorSize + desc.GetPayloadSize() + desc.GetInfoSize()
+}
+
+func (desc *descriptor) TotalSizeExpectMeta() int {
+	return desc.GetPayloadSize() + desc.GetInfoSize()
 }
 
 func (desc *descriptor) WriteTo(w io.Writer) (int, error) {
 	return w.Write(desc.descBuf)
 }
 
-func (desc *descriptor) ReadFrom(r io.Reader) (int, error) {
+func (desc *descriptor) ReadMeta(r io.Reader) (int, error) {
 	return r.Read(desc.descBuf)
 }

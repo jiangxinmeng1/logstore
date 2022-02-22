@@ -3,7 +3,6 @@ package store
 import (
 	"errors"
 	"fmt"
-	"io"
 	"logstore/pkg/common"
 	"sync"
 )
@@ -161,14 +160,9 @@ func (h *history) TryTruncate() error {
 
 func (h *history) Replay(handle ReplayHandle, observer ReplayObserver) error {
 	for _, entry := range h.entries {
-		observer.OnNewEntry(entry.Id())
-		for {
-			if err := handle(entry, observer); err != nil {
-				if errors.Is(err, io.EOF) {
-					break
-				}
-				return err
-			}
+		err := entry.Replay(handle, observer)
+		if err != nil {
+			return err
 		}
 	}
 	return nil

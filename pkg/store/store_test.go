@@ -3,6 +3,7 @@ package store
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"logstore/pkg/common"
 	"logstore/pkg/entry"
 	"math/rand"
@@ -240,9 +241,9 @@ func TestUncommitEntry(t *testing.T) {
 				case 1, 2, 3, 4, 5:
 					tids := make(map[string][]uint64)
 					tids[groupName] = make([]uint64, 0)
-					tids[groupName] = append(tids[groupName], tidAlloc.Get() + 1 + uint64(rand.Intn(3)))
+					tids[groupName] = append(tids[groupName], tidAlloc.Get()+1+uint64(rand.Intn(3)))
 					uncommitInfo := &entry.UncommitInfo{
-						Tids:   tids,
+						Tids: tids,
 					}
 					e.SetInfo(uncommitInfo)
 				case 99:
@@ -302,7 +303,6 @@ func TestReplay(t *testing.T) {
 	}
 	s, err := NewBaseStore(dir, name, cfg)
 	assert.Nil(t, err)
-	defer s.Close()
 
 	var wg sync.WaitGroup
 	var fwg sync.WaitGroup
@@ -318,22 +318,22 @@ func TestReplay(t *testing.T) {
 			case e := <-ch:
 				err := e.WaitDone()
 				assert.Nil(t, err)
-				t.Logf("synced %d", s.GetSynced("group1"))
-				t.Logf("checkpointed %d", s.GetCheckpointed("group1"))
-				t.Logf("penddings %d", s.GetPenddings("group1"))
+				// t.Logf("synced %d", s.GetSynced("group1"))
+				// t.Logf("checkpointed %d", s.GetCheckpointed("group1"))
+				// t.Logf("penddings %d", s.GetPenddings("group1"))
 				fwg.Done()
 			}
 		}
 	}()
 
-	var bs bytes.Buffer
-	for i := 0; i < 3000; i++ {
-		bs.WriteString("helloyou")
-	}
-	buf := bs.Bytes()
+	// var bs bytes.Buffer
+	// for i := 0; i < 3000; i++ {
+	// 	bs.WriteString("helloyou")
+	// }
+	// buf := bs.Bytes()
 
-	entryPerGroup := 550
-	groupCnt := 1
+	entryPerGroup := 23
+	groupCnt := 2
 	worker, _ := ants.NewPool(groupCnt)
 	fwg.Add(entryPerGroup * groupCnt)
 	f := func(groupNo int) func() {
@@ -344,17 +344,25 @@ func TestReplay(t *testing.T) {
 			ckp := uint64(0)
 			for i := 0; i < entryPerGroup; i++ {
 				e := entry.GetBase()
-				e.SetType(entry.ETFlush)
-				switch i % 100 {
-				case 1, 2, 3, 4, 5:
+				switch i % 50 {
+				case 1, 2, 3, 4, 5: //uncommit entry
+					e.SetType(entry.ETUncommitted)
 					tids := make(map[string][]uint64)
 					tids[groupName] = make([]uint64, 0)
-					tids[groupName] = append(tids[groupName], tidAlloc.Get() + 1 + uint64(rand.Intn(3)))
+					tids[groupName] = append(tids[groupName], tidAlloc.Get()+1+uint64(rand.Intn(3)))
 					uncommitInfo := &entry.UncommitInfo{
-						Tids:   tids,
+						Tids: tids,
 					}
+					fmt.Printf("%s",uncommitInfo.ToString())
 					e.SetInfo(uncommitInfo)
-				case 99:
+					str := uncommitInfo.ToString()
+					buf := []byte(str)
+					n := common.GPool.Alloc(uint64(len(buf)))
+					n.Buf = n.Buf[:len(buf)]
+					copy(n.GetBuf(), buf)
+					e.UnmarshalFromNode(n, true)
+				case 49: //ckp entry
+				e.SetType(entry.ETCheckpoint)
 					checkpointInterval := &entry.CheckpointInfo{
 						Group: groupName,
 						Checkpoint: &common.ClosedInterval{
@@ -364,24 +372,40 @@ func TestReplay(t *testing.T) {
 					}
 					ckp = checkpointInterval.Checkpoint.End
 					e.SetInfo(checkpointInterval)
-				case 50, 51, 52, 53:
+					str := checkpointInterval.ToString()
+					buf := []byte(str)
+					n := common.GPool.Alloc(uint64(len(buf)))
+					n.Buf = n.Buf[:len(buf)]
+					copy(n.GetBuf(), buf)
+					e.UnmarshalFromNode(n, true)
+				case 20, 21, 22, 23: //txn entry
+				e.SetType(entry.ETTxn)
 					txnInfo := &entry.TxnInfo{
 						Group:    groupName,
 						Tid:      tidAlloc.Alloc(),
 						CommitId: cidAlloc.Alloc(),
 					}
 					e.SetInfo(txnInfo)
-				default:
+					str := txnInfo.ToString()
+					buf := []byte(str)
+					n := common.GPool.Alloc(uint64(len(buf)))
+					n.Buf = n.Buf[:len(buf)]
+					copy(n.GetBuf(), buf)
+					e.UnmarshalFromNode(n, true)
+				default: //commit entry
+				e.SetType(entry.ETCustomizedStart)
 					commitInterval := &entry.CommitInfo{
 						Group:    groupName,
 						CommitId: cidAlloc.Alloc(),
 					}
 					e.SetInfo(commitInterval)
+					str := commitInterval.ToString()
+					buf := []byte(str)
+					n := common.GPool.Alloc(uint64(len(buf)))
+					n.Buf = n.Buf[:len(buf)]
+					copy(n.GetBuf(), buf)
+					e.UnmarshalFromNode(n, true)
 				}
-				n := common.GPool.Alloc(uint64(len(buf)))
-				n.Buf = n.Buf[:len(buf)]
-				copy(n.GetBuf(), buf)
-				e.UnmarshalFromNode(n, true)
 				s.AppendEntry(e)
 				ch <- e
 			}
@@ -397,9 +421,19 @@ func TestReplay(t *testing.T) {
 	wg.Wait()
 
 	h := s.file.GetHistory()
-	t.Log(h.String())
+	// t.Log(h.String())
 	err = h.TryTruncate()
 	assert.Nil(t, err)
-}
 
-//test replay(find last addr)
+	s.Close()
+
+	s, _ = NewBaseStore(dir, name, cfg)
+	r := newReplayer()
+	o := &noopObserver{}
+	err = s.file.Replay(r.replayHandler, o)
+	if err != nil {
+		fmt.Printf("err is %v", err)
+	}
+	r.Apply()
+	s.Close()
+}

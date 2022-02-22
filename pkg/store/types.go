@@ -30,6 +30,7 @@ type VFile interface {
 	InTxnCommits(map[string]map[uint64]uint64, map[string]*common.ClosedInterval) bool
 	MergeCheckpoint(*map[string]*common.ClosedInterval)
 	MergeTidCidMap(map[string]map[uint64]uint64)
+	Replay(ReplayHandle, ReplayObserver) error
 }
 
 type FileAppender interface {
@@ -77,7 +78,7 @@ type File interface {
 
 	Sync() error
 	GetAppender() FileAppender
-
+	Replay(ReplayHandle, ReplayObserver) error
 	GetHistory() History
 }
 

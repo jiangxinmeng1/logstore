@@ -25,31 +25,34 @@ type VFileUncommitInfo struct {
 }
 
 type VFileAddress struct {
+	Group    string
+	Tid      uint64
 	FileName string
 	Offset   int
 }
 
 //result contains addr, addr size
-func (addr *VFileAddress) Marshal() ([]byte, error) {
-	addrBuf, err := json.Marshal(addr)
+func MarshalAddrs(addrs []*VFileAddress) ([]byte, error) {
+	addrsBuf, err := json.Marshal(addrs)
 	if err != nil {
 		return nil, err
 	}
-	size := uint32(len(addrBuf))
+	size := uint32(len(addrsBuf))
 	sizebuf := make([]byte, 4)
 	binary.BigEndian.PutUint32(sizebuf, size)
-	addrBuf = append(addrBuf, sizebuf...)
-	return addrBuf, nil
+	addrsBuf = append(addrsBuf, sizebuf...)
+	return addrsBuf, nil
 }
 
-//marshal address, return remained bytes
-func (addr *VFileAddress) Unmarshal(buf []byte) ([]byte, error) {
+//marshal addresses, return remained bytes
+func UnmarshalAddrs(buf []byte) ([]byte, []*VFileAddress, error) {
+	addrs := make([]*VFileAddress, 0)
 	size := int(binary.BigEndian.Uint32(buf[len(buf)-4:]))
-	err := json.Unmarshal(buf[len(buf)-4-size:len(buf)-4], addr)
+	err := json.Unmarshal(buf[len(buf)-4-size:len(buf)-4], addrs)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return buf[:len(buf)-4-size], nil
+	return buf[:len(buf)-4-size], addrs, nil
 }
 
 func newVInfo() *vInfo {

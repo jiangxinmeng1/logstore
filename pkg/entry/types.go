@@ -22,6 +22,8 @@ type Desc interface {
 	SetType(Type)
 	GetPayloadSize() int
 	SetPayloadSize(int)
+	GetInfoSize() int
+	SetInfoSize(int)
 	TotalSize() int
 	GetMetaBuf() []byte
 	IsFlush() bool
@@ -33,6 +35,8 @@ type Entry interface {
 	GetPayload() []byte
 	SetInfo(interface{})
 	GetInfo() interface{}
+	GetInfoBuf() []byte
+	SetInfoBuf(buf []byte)
 
 	Unmarshal([]byte) error
 	UnmarshalFromNode(*common.MemNode, bool) error

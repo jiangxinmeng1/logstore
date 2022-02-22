@@ -2,7 +2,10 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+
+	// "fmt"
 	"logstore/pkg/common"
 	"logstore/pkg/entry"
 	"sync"
@@ -73,50 +76,59 @@ func (bs *baseStore) flushLoop() {
 	}
 }
 
+//set infosize, mashal info
 func (bs *baseStore) PrepareEntry(e entry.Entry) (entry.Entry, error) {
-	etype := e.GetType()
-	switch etype {
-	case entry.ETUncommitted:
-		info := entry.GetBase().GetInfo().(entry.UncommitInfo)
+	v := e.GetInfo()
+	switch info := v.(type) {
+	case *entry.UncommitInfo:
+		addrs := make([]*VFileAddress, 0)
 		for group, tids := range info.Tids {
 			for _, tid := range tids {
 				addr := bs.GetLastAddr(group, tid)
-				buf, err := addr.Marshal()
-				if err != nil {
-					return nil, err
+				if addr == nil{
+					addr = &VFileAddress{}
 				}
-				payload := e.GetPayload()
-				payload = append(payload, buf...)
-				err = e.Unmarshal(payload)
-				if err != nil {
-					return nil, err
-				}
+				addr.Group = group
+				addr.Tid = tid
+				addrs = append(addrs, addr)
 
 			}
 		}
-	case entry.ETTxn:
-		info := entry.GetBase().GetInfo().(entry.TxnInfo)
+		buf, err := json.Marshal(addrs)
+		if err != nil {
+			return nil, err
+		}
+		e.SetInfoSize(len(buf))
+		e.SetInfoBuf(buf)
+		return e, nil
+	case *entry.TxnInfo:
 		addr := bs.GetLastAddr(info.Group, info.Tid)
-		buf, err := addr.Marshal()
+		info.Addr = addr
+		buf, err := json.Marshal(info)
 		if err != nil {
 			return nil, err
 		}
-		payload := e.GetPayload()
-		payload = append(payload, buf...)
-		err = e.Unmarshal(payload)
+		e.SetInfoSize(len(buf))
+		e.SetInfoBuf(buf)
+		return e, nil
+	case *entry.CheckpointInfo, *entry.CommitInfo:
+		buf, err := json.Marshal(info)
 		if err != nil {
 			return nil, err
 		}
+		size := len(buf)
+		e.SetInfoSize(size)
+		e.SetInfoBuf(buf)
+		return e, nil
 	default:
+		return e, nil
 	}
-	return e, nil
 }
 
 func (bs *baseStore) onEntries(entries []entry.Entry) {
 	var err error
-	// fmt.Printf("entries %d\n", len(entries))
 	for _, e := range entries {
-		e, err = bs.PrepareEntry(e)
+		e, err := bs.PrepareEntry(e)
 		if err != nil {
 			panic(err)
 		}
@@ -124,10 +136,7 @@ func (bs *baseStore) onEntries(entries []entry.Entry) {
 		if err = appender.Prepare(e.TotalSize(), e.GetInfo()); err != nil {
 			panic(err)
 		}
-		if _, err = appender.Write(e.GetMetaBuf()); err != nil {
-			panic(err)
-		}
-		if _, err = appender.Write(e.GetPayload()); err != nil {
+		if _, err = e.WriteTo(appender); err != nil {
 			panic(err)
 		}
 		if err = appender.Commit(); err != nil {

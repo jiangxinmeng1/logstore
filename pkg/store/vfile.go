@@ -3,7 +3,9 @@ package store
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"io"
 	"logstore/pkg/common"
 	"os"
 	"sync"
@@ -208,5 +210,17 @@ func (vf *vFile) Destroy() error {
 	log.Infof("Removing version file: %s", name)
 	err := os.Remove(name)
 	return err
+}
 
+func (vf *vFile) Replay(handle ReplayHandle, observer ReplayObserver) error {
+		observer.OnNewEntry(vf.Id())
+		for {
+			if err := handle(vf, observer); err != nil {
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				return err
+			}
+		}
+	return nil
 }

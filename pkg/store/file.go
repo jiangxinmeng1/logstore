@@ -108,9 +108,13 @@ func OpenRotateFile(dir, name string, mu *sync.RWMutex, rotateChecker RotateChec
 				return nil, err
 			}
 			vf := &vFile{
-				File:    file,
-				version: version,
-				size:    int(f.Size()),
+				vInfo:      *newVInfo(),
+				RWMutex:    &sync.RWMutex{}, //?
+				File:       file,
+				version:    version,
+				commitCond: *sync.NewCond(new(sync.Mutex)),
+				history:    rf.history,
+				size:       int(f.Size()),
 			}
 			vf.ReadMeta(vf)
 			vfiles = append(vfiles, vf)
@@ -128,7 +132,13 @@ func OpenRotateFile(dir, name string, mu *sync.RWMutex, rotateChecker RotateChec
 	go rf.commitLoop()
 	return rf, err
 }
-
+func (rf *rotateFile) Replay(r ReplayHandle, o ReplayObserver) error {
+	rf.history.Replay(r, o)
+	for _, vf := range rf.uncommitted {//sequence?
+		vf.Replay(r, o)
+	}
+	return nil
+}
 func (rf *rotateFile) commitLoop() {
 	defer rf.wg.Done()
 	for {
