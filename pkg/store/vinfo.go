@@ -227,6 +227,7 @@ func (info *vInfo) Log(v interface{}) error {
 	case *entry.TxnInfo:
 		return info.LogTxnInfo(vi)
 	}
+	fmt.Printf("info is %v\n",v)
 	panic("not supported")
 }
 

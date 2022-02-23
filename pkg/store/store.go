@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	// "fmt"
 	"sync"
@@ -144,6 +145,7 @@ func (bs *baseStore) onEntries(entries []entry.Entry) {
 		if err != nil {
 			panic(err)
 		}
+		fmt.Printf("type is %v, info is %v\n",e.GetType(),e.GetInfo())
 		appender := bs.file.GetAppender()
 		if err = appender.Prepare(e.TotalSize(), e.GetInfo()); err != nil {
 			panic(err)
