@@ -185,10 +185,12 @@ func (bs *baseStore) Checkpoint(e entry.Entry) (err error) {
 	return bs.AppendEntry(e)
 }
 
-func (bs *baseStore) TryTruncate() error {
+func (bs *baseStore) TryCompact() error {
 	return bs.file.GetHistory().TryTruncate()
 }
-
+func (bs *baseStore) TryTruncate(size int64) error {
+	return bs.file.TryTruncate(size)
+}
 func (bs *baseStore) AppendEntry(e entry.Entry) (err error) {
 	if bs.IsClosed() {
 		return common.ClosedErr

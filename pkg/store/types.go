@@ -82,6 +82,7 @@ type File interface {
 	GetAppender() FileAppender
 	Replay(ReplayHandle, ReplayObserver) error
 	GetHistory() History
+	TryTruncate(int64) error
 }
 
 type Store interface {
@@ -91,5 +92,6 @@ type Store interface {
 	GetCheckpointed(string) uint64
 	GetSynced(string) uint64
 	AppendEntry(entry.Entry) error
-	TryTruncate() error
+	TryCompact() error
+	TryTruncate(int64) error
 }
