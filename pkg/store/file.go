@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"github.com/jiangxinmeng1/logstore/pkg/common"
+	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -68,13 +68,13 @@ func OpenRotateFile(dir, name string, mu *sync.RWMutex, rotateChecker RotateChec
 	}
 	newDir := false
 	if _, err = os.Stat(dir); os.IsNotExist(err) {
-		fmt.Printf("err is %v\n",err)
 		err = os.MkdirAll(dir, 0755)
 		if err != nil {
 			return nil, err
 		}
 		newDir = true
 	}
+	fmt.Printf("err is %v\n", err)
 
 	if rotateChecker == nil {
 		rotateChecker = NewMaxSizeRotateChecker(DefaultRotateCheckerMaxSize)
@@ -94,7 +94,7 @@ func OpenRotateFile(dir, name string, mu *sync.RWMutex, rotateChecker RotateChec
 	}
 	if !newDir {
 		files, err := ioutil.ReadDir(dir)
-		fmt.Printf("file is %v\n",files)
+		fmt.Printf("file is %v\n", files)
 		if err != nil {
 			return nil, err
 		}
@@ -136,7 +136,7 @@ func OpenRotateFile(dir, name string, mu *sync.RWMutex, rotateChecker RotateChec
 }
 func (rf *rotateFile) Replay(r ReplayHandle, o ReplayObserver) error {
 	rf.history.Replay(r, o)
-	for _, vf := range rf.uncommitted {//sequence?
+	for _, vf := range rf.uncommitted { //sequence?
 		vf.Replay(r, o)
 	}
 	return nil
