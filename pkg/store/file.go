@@ -74,7 +74,6 @@ func OpenRotateFile(dir, name string, mu *sync.RWMutex, rotateChecker RotateChec
 		}
 		newDir = true
 	}
-	fmt.Printf("err is %v\n", err)
 
 	if rotateChecker == nil {
 		rotateChecker = NewMaxSizeRotateChecker(DefaultRotateCheckerMaxSize)
@@ -94,7 +93,6 @@ func OpenRotateFile(dir, name string, mu *sync.RWMutex, rotateChecker RotateChec
 	}
 	if !newDir {
 		files, err := ioutil.ReadDir(dir)
-		fmt.Printf("file is %v\n", files)
 		if err != nil {
 			return nil, err
 		}
@@ -124,8 +122,15 @@ func OpenRotateFile(dir, name string, mu *sync.RWMutex, rotateChecker RotateChec
 		sort.Slice(vfiles, func(i, j int) bool {
 			return vfiles[i].(*vFile).version < vfiles[j].(*vFile).version
 		})
-		rf.history.Extend(vfiles[:len(vfiles)-1]...)
-		rf.uncommitted = append(rf.uncommitted, vfiles[len(vfiles)-1].(*vFile))
+		if len(vfiles) == 0 {
+			err = rf.scheduleNew()
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			rf.history.Extend(vfiles[:len(vfiles)-1]...)
+			rf.uncommitted = append(rf.uncommitted, vfiles[len(vfiles)-1].(*vFile))
+		}
 	} else {
 		err = rf.scheduleNew()
 	}
