@@ -44,6 +44,9 @@ func NewBaseStore(dir, name string, cfg *StoreCfg) (*baseStore, error) {
 		name:       name,
 		flushQueue: make(chan entry.Entry, DefaultMaxBatchSize*100),
 	}
+	if cfg == nil {
+		cfg = &StoreCfg{}
+	}
 	bs.file, err = OpenRotateFile(dir, name, nil, cfg.RotateChecker, cfg.HistoryFactory)
 	if err != nil {
 		return nil, err
