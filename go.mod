@@ -1,4 +1,4 @@
-module logstore
+module github.com/jiangxinmeng1/logstore
 
 go 1.16
 
