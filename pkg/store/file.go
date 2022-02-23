@@ -155,6 +155,7 @@ func (rf *rotateFile) TryTruncate(size int64) error {
 	if err != nil {
 		return err
 	}
+	fmt.Printf("truncate file %v -> %v\n",rf.uncommitted[l-1].size ,size)
 	rf.uncommitted[l-1].size = int(size)
 	return err
 }
