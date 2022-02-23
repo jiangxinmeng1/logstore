@@ -149,7 +149,7 @@ func (rf *rotateFile) Replay(r ReplayHandle, o ReplayObserver) error {
 func (rf *rotateFile) TryTruncate(size int64) error {
 	l := len(rf.uncommitted)
 	if l == 0 {
-		return nil
+		return errors.New("all files committed")
 	}
 	return rf.uncommitted[l-1].File.Truncate(size)
 }
