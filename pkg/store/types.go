@@ -86,6 +86,7 @@ type File interface {
 
 type Store interface {
 	io.Closer
+	Sync() error
 	Replay(ApplyHandle) error
 	GetCheckpointed(string) uint64
 	GetSynced(string) uint64
