@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	// "fmt"
+	"sync"
+
 	"github.com/jiangxinmeng1/logstore/pkg/common"
 	"github.com/jiangxinmeng1/logstore/pkg/entry"
-	"sync"
 )
 
 var (
@@ -210,6 +212,7 @@ func (s *baseStore) Sync() error {
 }
 
 func (s *baseStore) Replay(h ApplyHandle) error {
+	fmt.Printf("baseStore replay\n")
 	r := newReplayer(h)
 	o := &noopObserver{}
 	return s.file.Replay(r.replayHandler, o)

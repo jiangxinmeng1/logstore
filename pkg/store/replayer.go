@@ -100,7 +100,7 @@ func (r *replayer) onReplayEntry(e entry.Entry, _ ReplayObserver) error {
 	typ := e.GetType()
 	switch typ {
 	case entry.ETCheckpoint:
-		// fmt.Printf("ETCheckpoint\n")
+		fmt.Printf("ETCheckpoint\n")
 		infobuf := e.GetInfoBuf()
 		info := &entry.CheckpointInfo{}
 		json.Unmarshal(infobuf, info)
@@ -122,7 +122,7 @@ func (r *replayer) onReplayEntry(e entry.Entry, _ ReplayObserver) error {
 		}
 		r.checkpointrange[info.Group] = interval
 	case entry.ETUncommitted:
-		// fmt.Printf("ETUncommitted\n")
+		fmt.Printf("ETUncommitted\n")
 		infobuf := e.GetInfoBuf()
 		addrs := make([]*VFileAddress, 0)
 		json.Unmarshal(infobuf, &addrs)
@@ -144,7 +144,7 @@ func (r *replayer) onReplayEntry(e entry.Entry, _ ReplayObserver) error {
 			r.uncommit[addr.Group] = tidMap
 		}
 	case entry.ETTxn:
-		// fmt.Printf("ETTxn\n")
+		fmt.Printf("ETTxn\n")
 		infobuf := e.GetInfoBuf()
 		info := &entry.TxnInfo{}
 		json.Unmarshal(infobuf, info)
@@ -158,7 +158,7 @@ func (r *replayer) onReplayEntry(e entry.Entry, _ ReplayObserver) error {
 		copy(replayEty.payload, e.GetPayload())
 		r.entrys = append(r.entrys, replayEty)
 	default:
-		// fmt.Printf("default\n")
+		fmt.Printf("default\n")
 		infobuf := e.GetInfoBuf()
 		info := &entry.CommitInfo{}
 		json.Unmarshal(infobuf, info)
@@ -175,6 +175,7 @@ func (r *replayer) onReplayEntry(e entry.Entry, _ ReplayObserver) error {
 }
 
 func (r *replayer) replayHandler(v VFile, o ReplayObserver) error {
+	fmt.Printf("replayHandler\n")
 	vfile := v.(*vFile)
 	if vfile.version != r.version {
 		r.state.pos = 0

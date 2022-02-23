@@ -5,8 +5,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"github.com/jiangxinmeng1/logstore/pkg/common"
+	"io"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -97,9 +97,9 @@ func (vf *vFile) MergeCheckpoint(interval *map[string]*common.ClosedInterval) {
 		if len(ckps) == 0 {
 			continue
 		}
-		_,ok:=(*interval)[group]
-		if !ok{
-			(*interval)[group]=&common.ClosedInterval{}
+		_, ok := (*interval)[group]
+		if !ok {
+			(*interval)[group] = &common.ClosedInterval{}
 		}
 		(*interval)[group].TryMerge(*ckps[0])
 	}
@@ -161,7 +161,7 @@ func (vf *vFile) Commit() {
 	vf.commitCond.L.Unlock()
 }
 
-func (vf *vFile) WriteMeta(){
+func (vf *vFile) WriteMeta() {
 	buf := vf.MetatoBuf()
 	n, _ := vf.WriteAt(buf, int64(vf.size))
 	vf.size += n
@@ -213,14 +213,15 @@ func (vf *vFile) Destroy() error {
 }
 
 func (vf *vFile) Replay(handle ReplayHandle, observer ReplayObserver) error {
-		observer.OnNewEntry(vf.Id())
-		for {
-			if err := handle(vf, observer); err != nil {
-				if errors.Is(err, io.EOF) {
-					break
-				}
-				return err
+	fmt.Printf("vFile replay\n")
+	observer.OnNewEntry(vf.Id())
+	for {
+		if err := handle(vf, observer); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
 			}
+			return err
 		}
+	}
 	return nil
 }

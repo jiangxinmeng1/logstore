@@ -159,6 +159,7 @@ func (h *history) TryTruncate() error {
 }
 
 func (h *history) Replay(handle ReplayHandle, observer ReplayObserver) error {
+	fmt.Printf("history replay\n")
 	for _, entry := range h.entries {
 		err := entry.Replay(handle, observer)
 		if err != nil {
