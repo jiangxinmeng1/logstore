@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 
 	// "fmt"
 	"sync"
@@ -212,8 +211,12 @@ func (s *baseStore) Sync() error {
 }
 
 func (s *baseStore) Replay(h ApplyHandle) error {
-	fmt.Printf("baseStore replay\n")
 	r := newReplayer(h)
 	o := &noopObserver{}
-	return s.file.Replay(r.replayHandler, o)
+	err :=s.file.Replay(r.replayHandler, o)
+	if err != nil{
+		return err
+	}
+	r.Apply()
+	return nil
 }

@@ -213,7 +213,6 @@ func (vf *vFile) Destroy() error {
 }
 
 func (vf *vFile) Replay(handle ReplayHandle, observer ReplayObserver) error {
-	fmt.Printf("vFile replay\n")
 	observer.OnNewEntry(vf.Id())
 	for {
 		if err := handle(vf, observer); err != nil {
