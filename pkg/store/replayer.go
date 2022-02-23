@@ -61,6 +61,7 @@ func (r *replayer) Apply() {
 
 	for _, e := range r.entrys {
 		interval, ok := r.checkpointrange[e.group]
+		fmt.Printf("apply, range is %v\n",interval)
 		if ok {
 			if interval.Contains(common.ClosedInterval{Start: e.commitId, End: e.commitId}) {
 				continue
@@ -80,6 +81,7 @@ func (r *replayer) Apply() {
 			e = r.mergeUncommittedEntries(pre, e)
 			r.applyEntry(e.group, e.commitId, e.payload, e.entryType)
 		} else {
+			fmt.Printf("lalala\n")
 			r.applyEntry(e.group, e.commitId, e.payload, e.entryType)
 		}
 	}
@@ -170,6 +172,7 @@ func (r *replayer) onReplayEntry(e entry.Entry, _ ReplayObserver) error {
 		}
 		copy(replayEty.payload, e.GetPayload())
 		r.entrys = append(r.entrys, replayEty)
+		fmt.Printf("entries is %v\n",r.entrys)
 	}
 	return nil
 }
