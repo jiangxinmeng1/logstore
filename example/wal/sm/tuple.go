@@ -1,6 +1,6 @@
 package sm
 
-import "logstore/pkg/entry"
+import "github.com/jiangxinmeng1/logstore/pkg/entry"
 
 type Row struct {
 	lsn  uint64

@@ -3,7 +3,7 @@ package store
 import (
 	"errors"
 	"fmt"
-	"logstore/pkg/common"
+	"github.com/jiangxinmeng1/logstore/pkg/common"
 )
 
 const (

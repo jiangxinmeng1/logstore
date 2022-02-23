@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"logstore/pkg/common"
-	"logstore/pkg/entry"
+	"github.com/jiangxinmeng1/logstore/pkg/common"
+	"github.com/jiangxinmeng1/logstore/pkg/entry"
 )
 
 type noopObserver struct {

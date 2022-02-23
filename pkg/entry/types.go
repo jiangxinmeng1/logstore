@@ -2,7 +2,7 @@ package entry
 
 import (
 	"io"
-	"logstore/pkg/common"
+	"github.com/jiangxinmeng1/logstore/pkg/common"
 )
 
 type Type = uint16

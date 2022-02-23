@@ -1,10 +1,10 @@
 package sm
 
 import (
-	"logstore/pkg/common"
-	"logstore/pkg/entry"
-	statemachine "logstore/pkg/sm"
-	"logstore/pkg/store"
+	"github.com/jiangxinmeng1/logstore/pkg/common"
+	"github.com/jiangxinmeng1/logstore/pkg/entry"
+	statemachine "github.com/jiangxinmeng1/logstore/pkg/sm"
+	"github.com/jiangxinmeng1/logstore/pkg/store"
 	"sync"
 	"sync/atomic"
 

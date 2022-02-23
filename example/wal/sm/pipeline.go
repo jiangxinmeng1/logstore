@@ -1,7 +1,7 @@
 package sm
 
 import (
-	"logstore/pkg/entry"
+	"github.com/jiangxinmeng1/logstore/pkg/entry"
 	"sync"
 )
 

@@ -6,8 +6,8 @@ import (
 	"errors"
 
 	// "fmt"
-	"logstore/pkg/common"
-	"logstore/pkg/entry"
+	"github.com/jiangxinmeng1/logstore/pkg/common"
+	"github.com/jiangxinmeng1/logstore/pkg/entry"
 	"sync"
 )
 

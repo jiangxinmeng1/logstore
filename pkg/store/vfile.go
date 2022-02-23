@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"logstore/pkg/common"
+	"github.com/jiangxinmeng1/logstore/pkg/common"
 	"os"
 	"sync"
 	"sync/atomic"

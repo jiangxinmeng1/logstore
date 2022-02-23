@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"logstore/pkg/common"
+	"github.com/jiangxinmeng1/logstore/pkg/common"
 	"os"
 	"path"
 	"path/filepath"

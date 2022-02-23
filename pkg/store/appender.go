@@ -1,7 +1,7 @@
 package store
 
 import (
-	"logstore/pkg/entry"
+	"github.com/jiangxinmeng1/logstore/pkg/entry"
 )
 
 type fileAppender struct {

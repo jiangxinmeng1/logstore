@@ -3,9 +3,9 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"logstore/example/wal/sm"
-	"logstore/pkg/common"
-	"logstore/pkg/store"
+	"github.com/jiangxinmeng1/logstore/example/wal/sm"
+	"github.com/jiangxinmeng1/logstore/pkg/common"
+	"github.com/jiangxinmeng1/logstore/pkg/store"
 	"os"
 	"sync"
 	"time"
