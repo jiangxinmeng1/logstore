@@ -68,6 +68,7 @@ func OpenRotateFile(dir, name string, mu *sync.RWMutex, rotateChecker RotateChec
 	}
 	newDir := false
 	if _, err = os.Stat(dir); os.IsNotExist(err) {
+		fmt.Printf("err is %v\n",err)
 		err = os.MkdirAll(dir, 0755)
 		if err != nil {
 			return nil, err
@@ -93,6 +94,7 @@ func OpenRotateFile(dir, name string, mu *sync.RWMutex, rotateChecker RotateChec
 	}
 	if !newDir {
 		files, err := ioutil.ReadDir(dir)
+		fmt.Printf("file is %v\n",files)
 		if err != nil {
 			return nil, err
 		}
