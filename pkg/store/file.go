@@ -151,7 +151,12 @@ func (rf *rotateFile) TryTruncate(size int64) error {
 	if l == 0 {
 		return errors.New("all files committed")
 	}
-	return rf.uncommitted[l-1].File.Truncate(size)
+	err := rf.uncommitted[l-1].File.Truncate(size)
+	if err != nil {
+		return err
+	}
+	rf.uncommitted[l-1].size = int(size)
+	return err
 }
 func (rf *rotateFile) commitLoop() {
 	defer rf.wg.Done()
