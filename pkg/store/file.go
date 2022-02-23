@@ -103,7 +103,7 @@ func OpenRotateFile(dir, name string, mu *sync.RWMutex, rotateChecker RotateChec
 				fmt.Printf("err is %v\n", err)
 				continue
 			}
-			file, err := os.OpenFile(path.Join(dir, f.Name()), os.O_RDWR|os.O_APPEND, os.ModePerm)
+			file, err := os.OpenFile(path.Join(dir, f.Name()), os.O_RDWR, os.ModePerm)
 			if err != nil {
 				return nil, err
 			}
