@@ -433,7 +433,11 @@ func TestReplay(t *testing.T) {
 	s.Close()
 
 	s, _ = NewBaseStore(dir, name, cfg)
-	r := newReplayer()
+	a := func(group string, commitId uint64, payload []byte, typ uint16) (err error) {
+		fmt.Printf("%s", payload)
+		return nil
+	}
+	r := newReplayer(a)
 	o := &noopObserver{}
 	err = s.file.Replay(r.replayHandler, o)
 	if err != nil {

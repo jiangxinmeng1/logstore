@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"github.com/jiangxinmeng1/logstore/pkg/common"
 	"github.com/jiangxinmeng1/logstore/pkg/entry"
+	"io"
 )
 
 type noopObserver struct {
@@ -26,15 +26,17 @@ type replayer struct {
 	checkpointrange map[string]*common.ClosedInterval
 	checkpoints     []*replayEntry
 	mergeFuncs      map[string]func(pre, curr []byte) []byte
+	applyEntry      ApplyHandle
 }
 
-func newReplayer() *replayer {
+func newReplayer(h ApplyHandle) *replayer {
 	return &replayer{
 		uncommit:        make(map[string]map[uint64][]*replayEntry),
 		entrys:          make([]*replayEntry, 0),
 		checkpointrange: make(map[string]*common.ClosedInterval),
 		checkpoints:     make([]*replayEntry, 0),
 		mergeFuncs:      make(map[string]func(pre []byte, curr []byte) []byte),
+		applyEntry:      h,
 	}
 }
 func defaultMergePayload(pre, curr []byte) []byte {
@@ -48,13 +50,13 @@ func (r *replayer) mergeUncommittedEntries(pre, curr *replayEntry) *replayEntry 
 	if !ok {
 		mergePayload = defaultMergePayload
 	}
-	curr.payload=mergePayload(pre.payload, curr.payload)
+	curr.payload = mergePayload(pre.payload, curr.payload)
 	return curr
 }
 
 func (r *replayer) Apply() {
 	for _, e := range r.checkpoints {
-		fmt.Printf("%s", e.payload)
+		r.applyEntry(e.group, e.commitId, e.payload, e.entryType)
 	}
 
 	for _, e := range r.entrys {
@@ -76,9 +78,9 @@ func (r *replayer) Apply() {
 				}
 			}
 			e = r.mergeUncommittedEntries(pre, e)
-			fmt.Printf("%s", e.payload) //merge payloads
+			r.applyEntry(e.group, e.commitId, e.payload, e.entryType)
 		} else {
-			fmt.Printf("%s", e.payload)
+			r.applyEntry(e.group, e.commitId, e.payload, e.entryType)
 		}
 	}
 }

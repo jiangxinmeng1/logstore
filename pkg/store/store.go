@@ -13,7 +13,15 @@ import (
 
 var (
 	DefaultMaxBatchSize = 500
+	FlushEntry          entry.Entry
 )
+
+func init() {
+	FlushEntry = entry.GetBase()
+	FlushEntry.SetType(entry.ETFlush)
+	payload := make([]byte, 0)
+	FlushEntry.Unmarshal(payload)
+}
 
 type baseStore struct {
 	syncBase
@@ -85,7 +93,7 @@ func (bs *baseStore) PrepareEntry(e entry.Entry) (entry.Entry, error) {
 		for group, tids := range info.Tids {
 			for _, tid := range tids {
 				addr := bs.GetLastAddr(group, tid)
-				if addr == nil{
+				if addr == nil {
 					addr = &VFileAddress{}
 				}
 				addr.Group = group
@@ -186,4 +194,20 @@ func (bs *baseStore) AppendEntry(e entry.Entry) (err error) {
 	}
 	bs.flushQueue <- e
 	return nil
+}
+func (s *baseStore) Sync() error {
+	if err := s.AppendEntry(FlushEntry); err != nil {
+		return err
+	}
+	// if err := s.writer.Flush(); err != nil {
+	// 	return err
+	// }
+	err := s.file.Sync()
+	return err
+}
+
+func (s *baseStore) Replay(h ApplyHandle) error {
+	r := newReplayer(h)
+	o := &noopObserver{}
+	return s.file.Replay(r.replayHandler, o)
 }

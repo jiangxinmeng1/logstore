@@ -1,9 +1,9 @@
 package store
 
 import (
-	"io"
 	"github.com/jiangxinmeng1/logstore/pkg/common"
 	"github.com/jiangxinmeng1/logstore/pkg/entry"
+	"io"
 	"sync"
 )
 
@@ -69,6 +69,8 @@ type History interface {
 	TryTruncate() error
 }
 
+type ApplyHandle = func(group string, commitId uint64, payload []byte, typ uint16) (err error)
+
 type File interface {
 	io.Closer
 	sync.Locker
@@ -84,6 +86,9 @@ type File interface {
 
 type Store interface {
 	io.Closer
+	Replay(ApplyHandle) error
+	GetCheckpointed(string) uint64
+	GetSynced(string) uint64
 	AppendEntry(entry.Entry) error
 	TryTruncate() error
 }
