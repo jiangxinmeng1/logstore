@@ -106,6 +106,8 @@ func (r *replayer) onReplayEntry(e entry.Entry, _ ReplayObserver) error {
 		json.Unmarshal(infobuf, info)
 		// e.SetInfo(info)
 		replayEty := &replayEntry{
+			group: info.Group,
+			entryType: typ,
 			payload: make([]byte, e.GetPayloadSize()),
 		}
 		copy(replayEty.payload, e.GetPayload())
