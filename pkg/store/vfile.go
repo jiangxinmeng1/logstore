@@ -5,11 +5,13 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/jiangxinmeng1/logstore/pkg/common"
 	"io"
 	"os"
 	"sync"
 	"sync/atomic"
+
+	"github.com/jiangxinmeng1/logstore/pkg/common"
+	"github.com/jiangxinmeng1/logstore/pkg/entry"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -215,7 +217,7 @@ func (vf *vFile) Destroy() error {
 func (vf *vFile) Replay(handle ReplayHandle, observer ReplayObserver) error {
 	observer.OnNewEntry(vf.Id())
 	for {
-		if err := handle(vf, observer); err != nil {
+		if err := handle(vf, vf); err != nil {
 			if errors.Is(err, io.EOF) {
 				break
 			}
@@ -223,4 +225,33 @@ func (vf *vFile) Replay(handle ReplayHandle, observer ReplayObserver) error {
 		}
 	}
 	return nil
+}
+
+func (vf *vFile) OnNewEntry(int) {}
+func (vf *vFile) OnNewCommit(info *entry.CommitInfo) {
+	vf.Log(info)
+}
+func (vf *vFile) OnNewCheckpoint(info *entry.CheckpointInfo) {
+	vf.Log(info)
+}
+func (vf *vFile) OnNewTxn(info *entry.TxnInfo) {
+	vf.Log(info)
+}
+func (vf *vFile) OnNewUncommit(addrs []*VFileAddress) {
+	for _, addr := range addrs {
+		exist := false
+		tids, ok := vf.UncommitTxn[addr.Group]
+		if !ok {
+			tids = make([]uint64, 0)
+		}
+		for _, tid := range tids {
+			if tid == addr.Tid {
+				exist = true
+			}
+		}
+		if !exist {
+			tids = append(tids, addr.Tid)
+			vf.UncommitTxn[addr.Group] = tids
+		}
+	}
 }

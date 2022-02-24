@@ -331,13 +331,7 @@ func TestReplay(t *testing.T) {
 		}
 	}()
 
-	// var bs bytes.Buffer
-	// for i := 0; i < 3000; i++ {
-	// 	bs.WriteString("helloyou")
-	// }
-	// buf := bs.Bytes()
-
-	entryPerGroup := 23
+	entryPerGroup := 50
 	groupCnt := 2
 	worker, _ := ants.NewPool(groupCnt)
 	fwg.Add(entryPerGroup * groupCnt)
@@ -397,6 +391,10 @@ func TestReplay(t *testing.T) {
 					n.Buf = n.Buf[:len(buf)]
 					copy(n.GetBuf(), buf)
 					e.UnmarshalFromNode(n, true)
+					case 26,28: //flush entry
+						e.SetType(entry.ETFlush)	
+						payload := make([]byte, 0)
+						e.Unmarshal(payload)
 				default: //commit entry
 					e.SetType(entry.ETCustomizedStart)
 					commitInterval := &entry.CommitInfo{

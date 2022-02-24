@@ -103,13 +103,14 @@ func OpenRotateFile(dir, name string, mu *sync.RWMutex, rotateChecker RotateChec
 				fmt.Printf("err is %v\n", err)
 				continue
 			}
-			file, err := os.OpenFile(path.Join(dir, f.Name()), os.O_RDWR, os.ModePerm)
+			file, err := os.OpenFile(
+				path.Join(dir, f.Name()), os.O_RDWR, os.ModePerm)
 			if err != nil {
 				return nil, err
 			}
 			vf := &vFile{
 				vInfo:      *newVInfo(),
-				RWMutex:    &sync.RWMutex{}, //?
+				RWMutex:    &sync.RWMutex{}, 
 				File:       file,
 				version:    version,
 				commitCond: *sync.NewCond(new(sync.Mutex)),
@@ -129,7 +130,8 @@ func OpenRotateFile(dir, name string, mu *sync.RWMutex, rotateChecker RotateChec
 			}
 		} else {
 			rf.history.Extend(vfiles[:len(vfiles)-1]...)
-			rf.uncommitted = append(rf.uncommitted, vfiles[len(vfiles)-1].(*vFile))
+			rf.uncommitted = append(
+				rf.uncommitted, vfiles[len(vfiles)-1].(*vFile))
 		}
 	} else {
 		err = rf.scheduleNew()
@@ -139,13 +141,15 @@ func OpenRotateFile(dir, name string, mu *sync.RWMutex, rotateChecker RotateChec
 	go rf.commitLoop()
 	return rf, err
 }
+
 func (rf *rotateFile) Replay(r ReplayHandle, o ReplayObserver) error {
 	rf.history.Replay(r, o)
-	for _, vf := range rf.uncommitted { //sequence?
+	for _, vf := range rf.uncommitted {
 		vf.Replay(r, o)
 	}
 	return nil
 }
+
 func (rf *rotateFile) TryTruncate(size int64) error {
 	l := len(rf.uncommitted)
 	if l == 0 {
@@ -155,10 +159,10 @@ func (rf *rotateFile) TryTruncate(size int64) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("truncate file %v -> %v\n",rf.uncommitted[l-1].size ,size)
 	rf.uncommitted[l-1].size = int(size)
 	return err
 }
+
 func (rf *rotateFile) commitLoop() {
 	defer rf.wg.Done()
 	for {

@@ -122,5 +122,5 @@ func (sm *stateMachine) checkpoint(_ ...interface{}) {
 	if err = e.WaitDone(); err != nil {
 		return
 	}
-	sm.wal.TryTruncate()
+	sm.wal.TryCompact()
 }

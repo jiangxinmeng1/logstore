@@ -3,8 +3,11 @@ package store
 import (
 	"encoding/binary"
 	"encoding/json"
+	"errors"
+
 	// "errors"
 	"fmt"
+
 	"github.com/jiangxinmeng1/logstore/pkg/common"
 	"github.com/jiangxinmeng1/logstore/pkg/entry"
 
@@ -65,46 +68,19 @@ func newVInfo() *vInfo {
 	}
 }
 
-func (info *vInfo) ReadMeta(vf *vFile) {
+func (info *vInfo) ReadMeta(vf *vFile) error {
 	buf := make([]byte, Metasize)
 	vf.ReadAt(buf, int64(vf.size)-int64(Metasize))
 	size := binary.BigEndian.Uint16(buf)
 	buf = make([]byte, int(size))
 	vf.ReadAt(buf, int64(vf.size)-int64(Metasize)-int64(size))
 	json.Unmarshal(buf, info)
-	fmt.Printf("replay-%s\n", vf.String())
+	if info == nil {
+		return errors.New("read vfile meta failed")
+	}
+	return nil
 }
 
-//get metadata
-//return logged txn
-// func (info *vInfo) GetSyncedTxnOffset(groupName string, tid uint64) (*roaring64.Bitmap, error) {
-// 	return info.UncommitTxn[groupName][tid].Index.Clone(), nil
-// }
-
-// func (info *vInfo) OnTxnCommit(groupName string, tid, commitId uint64) error {
-// 	tids, ok := info.UncommitTxn[groupName]
-// 	if !ok {
-// 		return errors.New("Uncommit Entry Not Exist")
-// 	}
-// 	for i, uncommitTid := range tids {
-// 		if uncommitTid == tid {
-// 			tids = append(tids[:i], tids[i+1:]...)
-// 			if len(tids) == 0 {
-// 				delete(info.UncommitTxn, groupName)
-// 			} else {
-// 				info.UncommitTxn[groupName] = tids
-// 			}
-// 			bitMap, ok := info.TxnCommit[groupName]
-// 			if !ok {
-// 				bitMap = &roaring64.Bitmap{}
-// 			}
-// 			bitMap.Add(commitId)
-// 			info.TxnCommit[groupName] = bitMap
-// 			return nil
-// 		}
-// 	}
-// 	return errors.New("Uncommit Entry Not Exist")
-// }
 func (info *vInfo) MergeTidCidMap(tidCidMap map[string]map[uint64]uint64) {
 	for group, infoMap := range info.TidCidMap {
 		gMap, ok := tidCidMap[group]
@@ -227,7 +203,7 @@ func (info *vInfo) Log(v interface{}) error {
 	case *entry.TxnInfo:
 		return info.LogTxnInfo(vi)
 	}
-	fmt.Printf("info is %v\n",v)
+	fmt.Printf("info is %v\n", v)
 	panic("not supported")
 }
 

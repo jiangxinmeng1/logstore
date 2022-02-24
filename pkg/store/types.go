@@ -49,8 +49,10 @@ type FileReader interface {
 
 type ReplayObserver interface {
 	OnNewEntry(int)
-	OnNewCommit(uint64)
-	OnNewCheckpoint(common.ClosedInterval)
+	OnNewCommit(*entry.CommitInfo)
+	OnNewCheckpoint(*entry.CheckpointInfo)
+	OnNewTxn(*entry.TxnInfo)
+	OnNewUncommit(addrs []*VFileAddress)
 }
 
 type ReplayHandle = func(VFile, ReplayObserver) error

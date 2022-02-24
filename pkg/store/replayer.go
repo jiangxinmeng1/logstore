@@ -15,8 +15,10 @@ type noopObserver struct {
 func (o *noopObserver) OnNewEntry(_ int) {
 }
 
-func (o *noopObserver) OnNewCommit(_ uint64)                    {}
-func (o *noopObserver) OnNewCheckpoint(_ common.ClosedInterval) {}
+func (o *noopObserver)OnNewCommit(*entry.CommitInfo){}
+func (o *noopObserver)OnNewCheckpoint(*entry.CheckpointInfo){}
+func (o *noopObserver)OnNewTxn(*entry.TxnInfo){}
+func (o *noopObserver)OnNewUncommit(addrs []*VFileAddress){}
 
 type replayer struct {
 	version         int
@@ -62,7 +64,8 @@ func (r *replayer) Apply() {
 	for _, e := range r.entrys {
 		interval, ok := r.checkpointrange[e.group]
 		if ok {
-			if interval.Contains(common.ClosedInterval{Start: e.commitId, End: e.commitId}) {
+			if interval.Contains(
+				common.ClosedInterval{Start: e.commitId, End: e.commitId}) {
 				continue
 			}
 		}
@@ -73,7 +76,8 @@ func (r *replayer) Apply() {
 				entries, ok := tidMap[e.tid]
 				if ok {
 					for _, entry := range entries {
-						pre = r.mergeUncommittedEntries(pre, entry)
+						pre = r.mergeUncommittedEntries(
+							pre, entry)
 					}
 				}
 			}
@@ -95,19 +99,20 @@ type replayEntry struct {
 	payload []byte
 }
 
-//replayer meta, replay entry
-func (r *replayer) onReplayEntry(e entry.Entry, _ ReplayObserver) error {
+func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
 	typ := e.GetType()
 	switch typ {
+	case entry.ETFlush:
+		return nil
 	case entry.ETCheckpoint:
 		// fmt.Printf("ETCheckpoint\n")
 		infobuf := e.GetInfoBuf()
 		info := &entry.CheckpointInfo{}
 		json.Unmarshal(infobuf, info)
-		// e.SetInfo(info)
 		replayEty := &replayEntry{
 			group: info.Group,
 			entryType: typ,
+			commitId: info.Checkpoint.End,
 			payload: make([]byte, e.GetPayloadSize()),
 		}
 		copy(replayEty.payload, e.GetPayload())
@@ -123,6 +128,7 @@ func (r *replayer) onReplayEntry(e entry.Entry, _ ReplayObserver) error {
 			interval.TryMerge(*info.Checkpoint)
 		}
 		r.checkpointrange[info.Group] = interval
+		vf.OnNewCheckpoint(info)
 	case entry.ETUncommitted:
 		// fmt.Printf("ETUncommitted\n")
 		infobuf := e.GetInfoBuf()
@@ -159,6 +165,7 @@ func (r *replayer) onReplayEntry(e entry.Entry, _ ReplayObserver) error {
 		}
 		copy(replayEty.payload, e.GetPayload())
 		r.entrys = append(r.entrys, replayEty)
+		vf.OnNewTxn(info)
 	default:
 		// fmt.Printf("default\n")
 		infobuf := e.GetInfoBuf()
@@ -172,6 +179,7 @@ func (r *replayer) onReplayEntry(e entry.Entry, _ ReplayObserver) error {
 		}
 		copy(replayEty.payload, e.GetPayload())
 		r.entrys = append(r.entrys, replayEty)
+		vf.OnNewCommit(info)
 	}
 	return nil
 }
@@ -186,12 +194,12 @@ func (r *replayer) replayHandler(v VFile, o ReplayObserver) error {
 	defer entry.Free()
 
 	metaBuf := entry.GetMetaBuf()
-	_, err := vfile.Read(metaBuf) //read into metabuf?
+	_, err := vfile.Read(metaBuf) 
 	if err != nil {
 		if !errors.Is(err, io.EOF) {
 			return err
 		}
-		vfile.Truncate(int64(r.state.pos)) //vfile.size when to replay?
+		vfile.Truncate(int64(r.state.pos))
 		return err
 	}
 
@@ -200,16 +208,16 @@ func (r *replayer) replayHandler(v VFile, o ReplayObserver) error {
 		if !errors.Is(err, io.EOF) {
 			return err
 		}
-		vfile.Truncate(int64(r.state.pos)) //truncate the meta?
+		vfile.Truncate(int64(r.state.pos))
 		return err
 	}
 	if n != entry.TotalSizeExpectMeta() {
 		if current.pos == r.state.pos+n {
-			// Have read to the end of the file
-			vfile.Truncate(int64(current.pos)) //truncate?
+			vfile.Truncate(int64(current.pos)) 
 			return io.EOF
 		} else {
-			return errors.New(fmt.Sprintf("payload mismatch: %d != %d", n, entry.GetPayloadSize()))
+			return errors.New(fmt.Sprintf(
+				"payload mismatch: %d != %d", n, entry.GetPayloadSize()))
 		}
 	}
 	if err = r.onReplayEntry(entry, o); err != nil {

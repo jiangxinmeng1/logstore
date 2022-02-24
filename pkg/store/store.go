@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
-	// "fmt"
 	"sync"
 
 	"github.com/jiangxinmeng1/logstore/pkg/common"
@@ -145,7 +143,7 @@ func (bs *baseStore) onEntries(entries []entry.Entry) {
 		if err != nil {
 			panic(err)
 		}
-		fmt.Printf("type is %v, info is %v\n",e.GetType(),e.GetInfo())
+		fmt.Printf("type is %v, info is %v\n", e.GetType(), e.GetInfo())
 		appender := bs.file.GetAppender()
 		if err = appender.Prepare(e.TotalSize(), e.GetInfo()); err != nil {
 			panic(err)
@@ -217,10 +215,17 @@ func (s *baseStore) Sync() error {
 func (s *baseStore) Replay(h ApplyHandle) error {
 	r := newReplayer(h)
 	o := &noopObserver{}
-	err :=s.file.Replay(r.replayHandler, o)
-	if err != nil{
+	err := s.file.Replay(r.replayHandler, o)
+	if err != nil {
 		return err
 	}
+	for group, checkpointed := range r.checkpointrange {
+		s.checkpointed.ids[group] = checkpointed.End
+	}
+	for _, ent := range r.entrys {
+		s.checkpointed.ids[ent.group] = ent.commitId
+	}
+	//TODO uncommit entry info
 	r.Apply()
 	return nil
 }
