@@ -123,6 +123,7 @@ func (bs *baseStore) PrepareEntry(e entry.Entry) (entry.Entry, error) {
 		e.SetInfoBuf(buf)
 		return e, nil
 	case *entry.CheckpointInfo, *entry.CommitInfo:
+		fmt.Printf("prepare entry, ckp info is %v", v)
 		buf, err := json.Marshal(info)
 		if err != nil {
 			return nil, err

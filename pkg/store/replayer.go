@@ -109,6 +109,7 @@ func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
 		// fmt.Printf("ETCheckpoint\n")
 		infobuf := e.GetInfoBuf()
 		info := &entry.CheckpointInfo{}
+		fmt.Printf("replay ckp %v\n",info)
 		json.Unmarshal(infobuf, info)
 		replayEty := &replayEntry{
 			entryType: typ,
