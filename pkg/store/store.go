@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/jiangxinmeng1/logstore/pkg/common"
@@ -143,7 +142,6 @@ func (bs *baseStore) onEntries(entries []entry.Entry) {
 		if err != nil {
 			panic(err)
 		}
-		fmt.Printf("type is %v, info is %v\n", e.GetType(), e.GetInfo())
 		appender := bs.file.GetAppender()
 		if err = appender.Prepare(e.TotalSize(), e.GetInfo()); err != nil {
 			panic(err)

@@ -100,7 +100,6 @@ func OpenRotateFile(dir, name string, mu *sync.RWMutex, rotateChecker RotateChec
 		for _, f := range files {
 			version, err := ParseVersion(f.Name(), rf.name, suffix)
 			if err != nil {
-				fmt.Printf("err is %v\n", err)
 				continue
 			}
 			file, err := os.OpenFile(

@@ -30,7 +30,7 @@ func main() {
 
 	lsn := uint64(0)
 	now := time.Now()
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 100000; i++ {
 		insert := func() {
 			defer wg.Done()
 			var bs bytes.Buffer
