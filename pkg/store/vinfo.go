@@ -255,12 +255,18 @@ func (info *vInfo) LogCheckpoint(checkpointInfo *entry.CheckpointInfo) error {
 		ckps, ok := info.Checkpoints[group]
 		if !ok {
 			ckps = make([]*common.ClosedInterval, 0)
-			ckps = append(ckps, interval)
+			ckps = append(ckps, &common.ClosedInterval{
+				Start: interval.Start,
+				End: interval.End,
+			})
 			info.Checkpoints[group] = ckps
 			return nil
 		}
 		if len(ckps) == 0 {
-			ckps = append(ckps, interval)
+			ckps = append(ckps, &common.ClosedInterval{
+				Start: interval.Start,
+				End: interval.End,
+			})
 			info.Checkpoints[group] = ckps
 			return nil
 		}
