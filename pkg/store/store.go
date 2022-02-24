@@ -223,7 +223,7 @@ func (s *baseStore) Replay(h ApplyHandle) error {
 		s.checkpointed.ids[group] = checkpointed.End
 	}
 	for _, ent := range r.entrys {
-		s.checkpointed.ids[ent.group] = ent.commitId
+		s.synced.ids[ent.group] = ent.commitId
 	}
 	//TODO uncommit entry info
 	r.Apply()
