@@ -95,11 +95,13 @@ func TestAppender(t *testing.T) {
 		appender := rf.GetAppender()
 		assert.NotNil(t, appender)
 		if i%4 == 0 && i > 0 {
+			checkpoints := make(map[string]*common.ClosedInterval)
+			checkpoints["group1"] = &common.ClosedInterval{
+				Start: 0,
+				End:   common.GetGlobalSeqNum(),
+			}
 			checkpointInfo := &entry.CheckpointInfo{
-				Group: "group1",
-				Checkpoint: &common.ClosedInterval{
-					End: common.GetGlobalSeqNum(),
-				},
+				CheckpointRanges: checkpoints,
 			}
 			err = appender.Prepare(len(toWrite), checkpointInfo)
 			assert.Nil(t, err)
@@ -153,19 +155,19 @@ func TestVInfo(t *testing.T) {
 	commitInfo := &entry.CommitInfo{Group: "group1", CommitId: uint64(end + 2)}
 	err := vinfo.LogCommit(commitInfo)
 	assert.NotNil(t, err)
-
+	checkpoints := make(map[string]*common.ClosedInterval)
+	checkpoints["group1"] = &common.ClosedInterval{
+		Start: 0,
+		End:   uint64(end / 2),
+	}
 	checkpointInfo := &entry.CheckpointInfo{
-		Group: "group1",
-		Checkpoint: &common.ClosedInterval{
-			Start: 0,
-			End:   uint64(end / 2),
-		},
+		CheckpointRanges: checkpoints,
 	}
 	err = vinfo.LogCheckpoint(checkpointInfo)
 	assert.Nil(t, err)
 }
 
-func TestReadVInfo(t *testing.T){
+func TestReadVInfo(t *testing.T) {
 	dir := "/tmp/testappender"
 	os.RemoveAll(dir)
 	name := "mock"
@@ -190,11 +192,13 @@ func TestReadVInfo(t *testing.T){
 		appender := rf.GetAppender()
 		assert.NotNil(t, appender)
 		if i%4 == 0 && i > 0 {
+			checkpoints := make(map[string]*common.ClosedInterval)
+			checkpoints["group1"] = &common.ClosedInterval{
+				Start: 0,
+				End:   common.GetGlobalSeqNum(),
+			}
 			checkpointInfo := &entry.CheckpointInfo{
-				Group: "group1",
-				Checkpoint: &common.ClosedInterval{
-					End: common.GetGlobalSeqNum(),
-				},
+				CheckpointRanges: checkpoints,
 			}
 			appender.Prepare(len(toWrite), checkpointInfo)
 		} else {

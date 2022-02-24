@@ -57,13 +57,14 @@ func TestStore(t *testing.T) {
 	for i := 0; i < cnt; i++ {
 		e := entry.GetBase()
 		if i%2 == 0 && i > 0 {
-			checkpointInterval := &entry.CheckpointInfo{
-				Group: "group1",
-				Checkpoint: &common.ClosedInterval{
-					End: common.GetGlobalSeqNum(),
-				},
+			checkpoints := make(map[string]*common.ClosedInterval)
+			checkpoints["group1"] = &common.ClosedInterval{
+				End: common.GetGlobalSeqNum(),
 			}
-			e.SetInfo(checkpointInterval)
+			checkpointInfo := &entry.CheckpointInfo{
+				CheckpointRanges: checkpoints,
+			}
+			e.SetInfo(checkpointInfo)
 			e.SetType(entry.ETCheckpoint)
 		} else {
 			commitInterval := &entry.CommitInfo{
@@ -144,15 +145,17 @@ func TestMultiGroup(t *testing.T) {
 			for i := 0; i < entryPerGroup; i++ {
 				e := entry.GetBase()
 				if i%1000 == 0 && i > 0 {
-					checkpointInterval := &entry.CheckpointInfo{
-						Group: groupName,
-						Checkpoint: &common.ClosedInterval{
-							Start: ckp,
-							End:   alloc.Get(),
-						},
+					checkpoints := make(map[string]*common.ClosedInterval)
+					end := alloc.Get()
+					checkpoints["group1"] = &common.ClosedInterval{
+						Start: ckp,
+						End:   end,
 					}
-					ckp = checkpointInterval.Checkpoint.End + 1
-					e.SetInfo(checkpointInterval)
+					checkpointInfo := &entry.CheckpointInfo{
+						CheckpointRanges: checkpoints,
+					}
+					ckp = end
+					e.SetInfo(checkpointInfo)
 					e.SetType(entry.ETCheckpoint)
 				} else {
 					commitInterval := &entry.CommitInfo{
@@ -249,16 +252,18 @@ func TestUncommitEntry(t *testing.T) {
 					e.SetType(entry.ETUncommitted)
 					e.SetInfo(uncommitInfo)
 				case 99:
-					checkpointInterval := &entry.CheckpointInfo{
-						Group: groupName,
-						Checkpoint: &common.ClosedInterval{
-							Start: ckp,
-							End:   cidAlloc.Get(),
-						},
+					checkpoints := make(map[string]*common.ClosedInterval)
+					end := cidAlloc.Get()
+					checkpoints["group1"] = &common.ClosedInterval{
+						Start: ckp,
+						End:   end,
 					}
-					ckp = checkpointInterval.Checkpoint.End
+					checkpointInfo := &entry.CheckpointInfo{
+						CheckpointRanges: checkpoints,
+					}
+					ckp = end
 					e.SetType(entry.ETCheckpoint)
-					e.SetInfo(checkpointInterval)
+					e.SetInfo(checkpointInfo)
 				case 50, 51, 52, 53:
 					txnInfo := &entry.TxnInfo{
 						Group:    groupName,
@@ -362,16 +367,18 @@ func TestReplay(t *testing.T) {
 					e.UnmarshalFromNode(n, true)
 				case 49: //ckp entry
 					e.SetType(entry.ETCheckpoint)
-					checkpointInterval := &entry.CheckpointInfo{
-						Group: groupName,
-						Checkpoint: &common.ClosedInterval{
-							Start: ckp,
-							End:   cidAlloc.Get(),
-						},
+					checkpoints := make(map[string]*common.ClosedInterval)
+					end := cidAlloc.Get()
+					checkpoints["group1"] = &common.ClosedInterval{
+						Start: ckp,
+						End:   end,
 					}
-					ckp = checkpointInterval.Checkpoint.End
-					e.SetInfo(checkpointInterval)
-					str := checkpointInterval.ToString()
+					checkpointInfo := &entry.CheckpointInfo{
+						CheckpointRanges: checkpoints,
+					}
+					ckp = end
+					e.SetInfo(checkpointInfo)
+					str := checkpointInfo.ToString()
 					buf := []byte(str)
 					n := common.GPool.Alloc(uint64(len(buf)))
 					n.Buf = n.Buf[:len(buf)]
@@ -391,10 +398,10 @@ func TestReplay(t *testing.T) {
 					n.Buf = n.Buf[:len(buf)]
 					copy(n.GetBuf(), buf)
 					e.UnmarshalFromNode(n, true)
-					case 26,28: //flush entry
-						e.SetType(entry.ETFlush)	
-						payload := make([]byte, 0)
-						e.Unmarshal(payload)
+				case 26, 28: //flush entry
+					e.SetType(entry.ETFlush)
+					payload := make([]byte, 0)
+					e.Unmarshal(payload)
 				default: //commit entry
 					e.SetType(entry.ETCustomizedStart)
 					commitInterval := &entry.CommitInfo{
@@ -431,7 +438,7 @@ func TestReplay(t *testing.T) {
 	s.Close()
 
 	s, _ = NewBaseStore(dir, name, cfg)
-	a := func(group string, commitId uint64, payload []byte, typ uint16) (err error) {
+	a := func(group string, commitId uint64, payload []byte, typ uint16, info interface{}) (err error) {
 		fmt.Printf("%s", payload)
 		return nil
 	}

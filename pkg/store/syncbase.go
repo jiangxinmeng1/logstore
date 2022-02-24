@@ -47,7 +47,9 @@ func (base *syncBase) OnEntryReceived(e entry.Entry) error {
 		case *entry.CommitInfo:
 			base.syncing[v.Group] = v.CommitId
 		case *entry.CheckpointInfo:
-			base.checkpointing[v.Group] = v.Checkpoint.End
+			for group, interval:= range v.CheckpointRanges{
+			base.checkpointing[group] = interval.End
+			}
 		case *entry.UncommitInfo:
 			addr := v.Addr.(*VFileAddress)
 			for group, tids := range v.Tids {

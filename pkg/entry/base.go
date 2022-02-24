@@ -2,8 +2,8 @@ package entry
 
 import (
 	"fmt"
-	"io"
 	"github.com/jiangxinmeng1/logstore/pkg/common"
+	"io"
 	"sync"
 )
 
@@ -26,12 +26,17 @@ type Base struct {
 }
 
 type CheckpointInfo struct {
-	Group      string
-	Checkpoint *common.ClosedInterval
+	CheckpointRanges map[string]*common.ClosedInterval
+	// Group      string
+	// Checkpoint *common.ClosedInterval
 }
 
 func (info *CheckpointInfo) ToString() string {
-	return fmt.Sprintf("checkpoint entry <%s>-%s\n", info.Group, info.Checkpoint)
+	s := "checkpoint entry "
+	for group, checkpoint := range info.CheckpointRanges {
+		s = fmt.Sprintf("%s <%s>-%s", s, group, checkpoint)
+	}
+	return fmt.Sprintf("%s\n", s)
 }
 
 type CommitInfo struct {

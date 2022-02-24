@@ -15,10 +15,10 @@ type noopObserver struct {
 func (o *noopObserver) OnNewEntry(_ int) {
 }
 
-func (o *noopObserver)OnNewCommit(*entry.CommitInfo){}
-func (o *noopObserver)OnNewCheckpoint(*entry.CheckpointInfo){}
-func (o *noopObserver)OnNewTxn(*entry.TxnInfo){}
-func (o *noopObserver)OnNewUncommit(addrs []*VFileAddress){}
+func (o *noopObserver) OnNewCommit(*entry.CommitInfo)         {}
+func (o *noopObserver) OnNewCheckpoint(*entry.CheckpointInfo) {}
+func (o *noopObserver) OnNewTxn(*entry.TxnInfo)               {}
+func (o *noopObserver) OnNewUncommit(addrs []*VFileAddress)   {}
 
 type replayer struct {
 	version         int
@@ -58,7 +58,7 @@ func (r *replayer) mergeUncommittedEntries(pre, curr *replayEntry) *replayEntry 
 
 func (r *replayer) Apply() {
 	for _, e := range r.checkpoints {
-		r.applyEntry(e.group, e.commitId, e.payload, e.entryType)
+		r.applyEntry(e.group, e.commitId, e.payload, e.entryType, e.info)
 	}
 
 	for _, e := range r.entrys {
@@ -82,9 +82,9 @@ func (r *replayer) Apply() {
 				}
 			}
 			e = r.mergeUncommittedEntries(pre, e)
-			r.applyEntry(e.group, e.commitId, e.payload, e.entryType)
+			r.applyEntry(e.group, e.commitId, e.payload, e.entryType, nil)
 		} else {
-			r.applyEntry(e.group, e.commitId, e.payload, e.entryType)
+			r.applyEntry(e.group, e.commitId, e.payload, e.entryType, nil)
 		}
 	}
 }
@@ -97,6 +97,7 @@ type replayEntry struct {
 	tid uint64
 	// checkpointRange *common.ClosedInterval
 	payload []byte
+	info    interface{}
 }
 
 func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
@@ -110,24 +111,25 @@ func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
 		info := &entry.CheckpointInfo{}
 		json.Unmarshal(infobuf, info)
 		replayEty := &replayEntry{
-			group: info.Group,
 			entryType: typ,
-			commitId: info.Checkpoint.End,
-			payload: make([]byte, e.GetPayloadSize()),
+			payload:   make([]byte, e.GetPayloadSize()),
+			info:      info,
 		}
 		copy(replayEty.payload, e.GetPayload())
 		r.checkpoints = append(r.checkpoints, replayEty)
 
-		interval, ok := r.checkpointrange[info.Group]
-		if !ok {
-			interval = &common.ClosedInterval{
-				Start: info.Checkpoint.Start,
-				End:   info.Checkpoint.End,
+		for group, ckp := range info.CheckpointRanges {
+			interval, ok := r.checkpointrange[group]
+			if !ok {
+				interval = &common.ClosedInterval{
+					Start: ckp.Start,
+					End:   ckp.End,
+				}
+			} else {
+				interval.TryMerge(*ckp)
 			}
-		} else {
-			interval.TryMerge(*info.Checkpoint)
+			r.checkpointrange[group] = interval
 		}
-		r.checkpointrange[info.Group] = interval
 		vf.OnNewCheckpoint(info)
 	case entry.ETUncommitted:
 		// fmt.Printf("ETUncommitted\n")
@@ -194,7 +196,7 @@ func (r *replayer) replayHandler(v VFile, o ReplayObserver) error {
 	defer entry.Free()
 
 	metaBuf := entry.GetMetaBuf()
-	_, err := vfile.Read(metaBuf) 
+	_, err := vfile.Read(metaBuf)
 	if err != nil {
 		if !errors.Is(err, io.EOF) {
 			return err
@@ -213,7 +215,7 @@ func (r *replayer) replayHandler(v VFile, o ReplayObserver) error {
 	}
 	if n != entry.TotalSizeExpectMeta() {
 		if current.pos == r.state.pos+n {
-			vfile.Truncate(int64(current.pos)) 
+			vfile.Truncate(int64(current.pos))
 			return io.EOF
 		} else {
 			return errors.New(fmt.Sprintf(

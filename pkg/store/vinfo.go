@@ -251,22 +251,25 @@ func (info *vInfo) LogCommit(commitInfo *entry.CommitInfo) error {
 }
 
 func (info *vInfo) LogCheckpoint(checkpointInfo *entry.CheckpointInfo) error {
-	ckps, ok := info.Checkpoints[checkpointInfo.Group]
-	if !ok {
-		ckps = make([]*common.ClosedInterval, 0)
-		ckps = append(ckps, checkpointInfo.Checkpoint)
-		info.Checkpoints[checkpointInfo.Group] = ckps
-		return nil
+	for group, interval := range checkpointInfo.CheckpointRanges {
+		ckps, ok := info.Checkpoints[group]
+		if !ok {
+			ckps = make([]*common.ClosedInterval, 0)
+			ckps = append(ckps, interval)
+			info.Checkpoints[group] = ckps
+			return nil
+		}
+		if len(ckps) == 0 {
+			ckps = append(ckps, interval)
+			info.Checkpoints[group] = ckps
+			return nil
+		}
+		ok = ckps[len(ckps)-1].TryMerge(*interval)
+		if !ok {
+			ckps = append(ckps, interval)
+		}
+		info.Checkpoints[group] = ckps
+
 	}
-	if len(ckps) == 0 {
-		ckps = append(ckps, checkpointInfo.Checkpoint)
-		info.Checkpoints[checkpointInfo.Group] = ckps
-		return nil
-	}
-	ok = ckps[len(ckps)-1].TryMerge(*checkpointInfo.Checkpoint)
-	if !ok {
-		ckps = append(ckps, checkpointInfo.Checkpoint)
-	}
-	info.Checkpoints[checkpointInfo.Group] = ckps
 	return nil
 }
