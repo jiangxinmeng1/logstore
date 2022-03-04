@@ -26,7 +26,7 @@ type Base struct {
 }
 
 type CheckpointInfo struct {
-	CheckpointRanges map[string]*common.ClosedInterval
+	CheckpointRanges map[uint32]*common.ClosedInterval
 	// Group      string
 	// Checkpoint *common.ClosedInterval
 }
@@ -34,22 +34,22 @@ type CheckpointInfo struct {
 func (info *CheckpointInfo) ToString() string {
 	s := "checkpoint entry "
 	for group, checkpoint := range info.CheckpointRanges {
-		s = fmt.Sprintf("%s <%s>-%s", s, group, checkpoint)
+		s = fmt.Sprintf("%s <%d>-%s", s, group, checkpoint)
 	}
 	return fmt.Sprintf("%s\n", s)
 }
 
 type CommitInfo struct {
-	Group    string
+	Group    uint32
 	CommitId uint64
 }
 
 func (info *CommitInfo) ToString() string {
-	return fmt.Sprintf("commit entry <%s>-%d\n", info.Group, info.CommitId)
+	return fmt.Sprintf("commit entry <%d>-%d\n", info.Group, info.CommitId)
 }
 
 type UncommitInfo struct {
-	Tids map[string][]uint64
+	Tids map[uint32][]uint64
 	Addr interface{}
 }
 
@@ -58,14 +58,14 @@ func (info *UncommitInfo) ToString() string {
 }
 
 type TxnInfo struct {
-	Group    string
+	Group    uint32
 	Tid      uint64
 	CommitId uint64
 	Addr     interface{}
 }
 
 func (info *TxnInfo) ToString() string {
-	return fmt.Sprintf("txn entry <%s> %d-%d\n", info.Group, info.Tid, info.CommitId)
+	return fmt.Sprintf("txn entry <%d> %d-%d\n", info.Group, info.Tid, info.CommitId)
 }
 
 func GetBase() *Base {

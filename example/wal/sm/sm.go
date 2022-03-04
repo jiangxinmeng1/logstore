@@ -108,8 +108,8 @@ func (sm *stateMachine) checkpoint(_ ...interface{}) {
 	e := entry.GetBase()
 	defer e.Free()
 	e.SetType(entry.ETCheckpoint)
-	checkpoints := make(map[string]*common.ClosedInterval)
-	checkpoints["g1"] = &common.ClosedInterval{
+	checkpoints := make(map[uint32]*common.ClosedInterval)
+	checkpoints[1] = &common.ClosedInterval{
 		End: sm.VisibleLSN(),
 	}
 	ckpInfo := &entry.CheckpointInfo{

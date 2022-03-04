@@ -54,7 +54,7 @@ func newVFile(mu *sync.RWMutex, name string, version int, history History) (*vFi
 	}, nil
 }
 
-func (vf *vFile) InCommits(intervals map[string]*common.ClosedInterval) bool {
+func (vf *vFile) InCommits(intervals map[uint32]*common.ClosedInterval) bool {
 	for group, commits := range vf.Commits {
 		interval, ok := intervals[group]
 		if !ok {
@@ -67,7 +67,7 @@ func (vf *vFile) InCommits(intervals map[string]*common.ClosedInterval) bool {
 	return true
 }
 
-func (vf *vFile) InCheckpoint(intervals map[string]*common.ClosedInterval) bool {
+func (vf *vFile) InCheckpoint(intervals map[uint32]*common.ClosedInterval) bool {
 	for group, ckps := range vf.Checkpoints {
 		interval, ok := intervals[group]
 		if !ok {
@@ -83,12 +83,12 @@ func (vf *vFile) InCheckpoint(intervals map[string]*common.ClosedInterval) bool 
 }
 
 // TODO: process multi checkpoints.
-func (vf *vFile) MergeCheckpoint(interval *map[string]*common.ClosedInterval) {
+func (vf *vFile) MergeCheckpoint(interval *map[uint32]*common.ClosedInterval) {
 	if len(vf.Checkpoints) == 0 {
 		return
 	}
 	if interval == nil {
-		ret := make(map[string]*common.ClosedInterval)
+		ret := make(map[uint32]*common.ClosedInterval)
 		for group, ckps := range vf.Checkpoints {
 			ret[group] = ckps[0]
 		}

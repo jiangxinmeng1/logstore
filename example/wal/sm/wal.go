@@ -37,7 +37,7 @@ func (wal *Wal) PrepareLog(op OpT, item []byte) (entry.Entry, error) {
 	e.Unmarshal(item)
 	id := wal.idAlloc.Alloc()
 	info:=&entry.CommitInfo{
-		Group: "g1",
+		Group: 1,
 		CommitId: id,
 	}
 	e.SetInfo(info)

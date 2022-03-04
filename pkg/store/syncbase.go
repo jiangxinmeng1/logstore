@@ -7,33 +7,33 @@ import (
 
 type syncBase struct {
 	*sync.RWMutex
-	checkpointing, syncing map[string]uint64
+	checkpointing, syncing map[uint32]uint64
 	checkpointed, synced   *syncMap
-	uncommits              map[string]map[uint64]*VFileAddress
+	uncommits              map[uint32]map[uint64]*VFileAddress
 }
 
 type syncMap struct {
 	*sync.RWMutex
-	ids map[string]uint64
+	ids map[uint32]uint64
 }
 
 func newSyncMap() *syncMap {
 	return &syncMap{
 		RWMutex: new(sync.RWMutex),
-		ids:     make(map[string]uint64),
+		ids:     make(map[uint32]uint64),
 	}
 }
 func newSyncBase() *syncBase {
 	return &syncBase{
-		checkpointing: make(map[string]uint64),
-		syncing:       make(map[string]uint64),
+		checkpointing: make(map[uint32]uint64),
+		syncing:       make(map[uint32]uint64),
 		checkpointed:  newSyncMap(),
 		synced:        newSyncMap(),
-		uncommits:     make(map[string]map[uint64]*VFileAddress),
+		uncommits:     make(map[uint32]map[uint64]*VFileAddress),
 	}
 }
 
-func (base *syncBase) GetLastAddr(groupName string, tid uint64) *VFileAddress {
+func (base *syncBase) GetLastAddr(groupName uint32, tid uint64) *VFileAddress {
 	tidMap, ok := base.uncommits[groupName]
 	if !ok {
 		return nil
@@ -80,33 +80,33 @@ func (base *syncBase) OnEntryReceived(e entry.Entry) error {
 	return nil
 }
 
-func (base *syncBase) GetPenddings(groupName string) uint64 {
-	ckp := base.GetCheckpointed(groupName)
-	commit := base.GetSynced(groupName)
+func (base *syncBase) GetPenddings(groupId uint32) uint64 {
+	ckp := base.GetCheckpointed(groupId)
+	commit := base.GetSynced(groupId)
 	return commit - ckp
 }
 
-func (base *syncBase) GetCheckpointed(groupName string) uint64 {
+func (base *syncBase) GetCheckpointed(groupId uint32) uint64 {
 	base.checkpointed.RLock()
 	defer base.checkpointed.RUnlock()
-	return base.checkpointed.ids[groupName]
+	return base.checkpointed.ids[groupId]
 }
 
-func (base *syncBase) SetCheckpointed(groupName string, id uint64) {
+func (base *syncBase) SetCheckpointed(groupId uint32, id uint64) {
 	base.checkpointed.Lock()
-	base.checkpointed.ids[groupName] = id
+	base.checkpointed.ids[groupId] = id
 	base.checkpointed.Unlock()
 }
 
-func (base *syncBase) GetSynced(groupName string) uint64 {
+func (base *syncBase) GetSynced(groupId uint32) uint64 {
 	base.synced.RLock()
 	defer base.synced.RUnlock()
-	return base.synced.ids[groupName]
+	return base.synced.ids[groupId]
 }
 
-func (base *syncBase) SetSynced(groupName string, id uint64) {
+func (base *syncBase) SetSynced(groupId uint32, id uint64) {
 	base.synced.Lock()
-	base.synced.ids[groupName] = id
+	base.synced.ids[groupId] = id
 	base.synced.Unlock()
 }
 

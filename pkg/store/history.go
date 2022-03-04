@@ -125,9 +125,9 @@ type entryWrapper struct {
 
 // One worker
 func (h *history) TryTruncate() error {
-	gIntervals := make(map[string]*common.ClosedInterval)
+	gIntervals := make(map[uint32]*common.ClosedInterval)
 	toDelete := make([]entryWrapper, 0, 4)
-	tidCidMap := make(map[string]map[uint64]uint64)
+	tidCidMap := make(map[uint32]map[uint64]uint64)
 	h.mu.RLock()
 	entries := make([]VFile, len(h.entries))
 	for i, entry := range h.entries {

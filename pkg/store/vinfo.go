@@ -15,11 +15,11 @@ import (
 )
 
 type vInfo struct {
-	Commits     map[string]*common.ClosedInterval
-	Checkpoints map[string][]*common.ClosedInterval
-	UncommitTxn map[string][]uint64
-	// TxnCommit   map[string]*roaring64.Bitmap
-	TidCidMap map[string]map[uint64]uint64
+	Commits     map[uint32]*common.ClosedInterval
+	Checkpoints map[uint32][]*common.ClosedInterval
+	UncommitTxn map[uint32][]uint64
+	// TxnCommit   map[uint32]*roaring64.Bitmap
+	TidCidMap map[uint32]map[uint64]uint64
 }
 
 type VFileUncommitInfo struct {
@@ -28,7 +28,7 @@ type VFileUncommitInfo struct {
 }
 
 type VFileAddress struct {
-	Group    string
+	Group    uint32
 	Tid      uint64
 	FileName string
 	Offset   int
@@ -60,11 +60,11 @@ func UnmarshalAddrs(buf []byte) ([]byte, []*VFileAddress, error) {
 
 func newVInfo() *vInfo {
 	return &vInfo{
-		Commits:     make(map[string]*common.ClosedInterval),
-		Checkpoints: make(map[string][]*common.ClosedInterval),
-		UncommitTxn: make(map[string][]uint64),
+		Commits:     make(map[uint32]*common.ClosedInterval),
+		Checkpoints: make(map[uint32][]*common.ClosedInterval),
+		UncommitTxn: make(map[uint32][]uint64),
 		// TxnCommit:   make(map[string]*roaring64.Bitmap),
-		TidCidMap: make(map[string]map[uint64]uint64),
+		TidCidMap: make(map[uint32]map[uint64]uint64),
 	}
 }
 
@@ -81,7 +81,7 @@ func (info *vInfo) ReadMeta(vf *vFile) error {
 	return nil
 }
 
-func (info *vInfo) MergeTidCidMap(tidCidMap map[string]map[uint64]uint64) {
+func (info *vInfo) MergeTidCidMap(tidCidMap map[uint32]map[uint64]uint64) {
 	for group, infoMap := range info.TidCidMap {
 		gMap, ok := tidCidMap[group]
 		if !ok {
@@ -93,7 +93,7 @@ func (info *vInfo) MergeTidCidMap(tidCidMap map[string]map[uint64]uint64) {
 		tidCidMap[group] = gMap
 	}
 }
-func (info *vInfo) InTxnCommits(tidCidMap map[string]map[uint64]uint64, intervals map[string]*common.ClosedInterval) bool {
+func (info *vInfo) InTxnCommits(tidCidMap map[uint32]map[uint64]uint64, intervals map[uint32]*common.ClosedInterval) bool {
 	for group, tids := range info.UncommitTxn {
 		tidMap, ok := tidCidMap[group]
 		if !ok {
@@ -120,14 +120,14 @@ func (info *vInfo) MetatoBuf() []byte {
 	return buf
 }
 
-func (info *vInfo) GetCommits(groupName string) (commits common.ClosedInterval) {
-	commits = *info.Commits[groupName]
+func (info *vInfo) GetCommits(groupId uint32) (commits common.ClosedInterval) {
+	commits = *info.Commits[groupId]
 	return commits
 }
 
-func (info *vInfo) GetCheckpoints(groupName string) (checkpoint []common.ClosedInterval) {
+func (info *vInfo) GetCheckpoints(groupId uint32) (checkpoint []common.ClosedInterval) {
 	checkpoint = make([]common.ClosedInterval, 0)
-	for _, interval := range info.Checkpoints[groupName] {
+	for _, interval := range info.Checkpoints[groupId] {
 		checkpoint = append(checkpoint, *interval)
 	}
 	return checkpoint
@@ -135,7 +135,7 @@ func (info *vInfo) GetCheckpoints(groupName string) (checkpoint []common.ClosedI
 
 func (info *vInfo) String() string {
 	s := "("
-	groups := make(map[string]struct{})
+	groups := make(map[uint32]struct{})
 	for group := range info.Commits {
 		groups[group] = struct{}{}
 	}
@@ -149,7 +149,7 @@ func (info *vInfo) String() string {
 		groups[group] = struct{}{}
 	}
 	for group := range groups {
-		s = fmt.Sprintf("%s<%s>-[", s, group)
+		s = fmt.Sprintf("%s<%d>-[", s, group)
 
 		commit, ok := info.Commits[group]
 		if ok {

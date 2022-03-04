@@ -23,21 +23,21 @@ func (o *noopObserver) OnNewUncommit(addrs []*VFileAddress)   {}
 type replayer struct {
 	version         int
 	state           vFileState
-	uncommit        map[string]map[uint64][]*replayEntry
+	uncommit        map[uint32]map[uint64][]*replayEntry
 	entrys          []*replayEntry
-	checkpointrange map[string]*common.ClosedInterval
+	checkpointrange map[uint32]*common.ClosedInterval
 	checkpoints     []*replayEntry
-	mergeFuncs      map[string]func(pre, curr []byte) []byte
+	mergeFuncs      map[uint32]func(pre, curr []byte) []byte
 	applyEntry      ApplyHandle
 }
 
 func newReplayer(h ApplyHandle) *replayer {
 	return &replayer{
-		uncommit:        make(map[string]map[uint64][]*replayEntry),
+		uncommit:        make(map[uint32]map[uint64][]*replayEntry),
 		entrys:          make([]*replayEntry, 0),
-		checkpointrange: make(map[string]*common.ClosedInterval),
+		checkpointrange: make(map[uint32]*common.ClosedInterval),
 		checkpoints:     make([]*replayEntry, 0),
-		mergeFuncs:      make(map[string]func(pre []byte, curr []byte) []byte),
+		mergeFuncs:      make(map[uint32]func(pre []byte, curr []byte) []byte),
 		applyEntry:      h,
 	}
 }
@@ -91,7 +91,7 @@ func (r *replayer) Apply() {
 
 type replayEntry struct {
 	entryType uint16
-	group     string
+	group     uint32
 	commitId  uint64
 	// isTxn     bool
 	tid uint64
@@ -147,6 +147,7 @@ func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
 			}
 			replayEty := &replayEntry{
 				payload: make([]byte, e.GetPayloadSize()),
+				info:    addr,
 			}
 			copy(replayEty.payload, e.GetPayload())
 			entries = append(entries, replayEty)

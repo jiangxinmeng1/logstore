@@ -8,7 +8,6 @@ import (
 	"github.com/jiangxinmeng1/logstore/pkg/entry"
 	"math/rand"
 	"os"
-	"strconv"
 	"sync"
 	"testing"
 
@@ -41,7 +40,7 @@ func TestStore(t *testing.T) {
 			case e := <-ch:
 				err := e.WaitDone()
 				assert.Nil(t, err)
-				t.Logf("synced %d", s.GetSynced("group1"))
+				t.Logf("synced %d", s.GetSynced(1))
 				// t.Logf("checkpointed %d", s.GetCheckpointed())
 				fwg.Done()
 			}
@@ -57,8 +56,8 @@ func TestStore(t *testing.T) {
 	for i := 0; i < cnt; i++ {
 		e := entry.GetBase()
 		if i%2 == 0 && i > 0 {
-			checkpoints := make(map[string]*common.ClosedInterval)
-			checkpoints["group1"] = &common.ClosedInterval{
+			checkpoints := make(map[uint32]*common.ClosedInterval)
+			checkpoints[1] = &common.ClosedInterval{
 				End: common.GetGlobalSeqNum(),
 			}
 			checkpointInfo := &entry.CheckpointInfo{
@@ -68,7 +67,7 @@ func TestStore(t *testing.T) {
 			e.SetType(entry.ETCheckpoint)
 		} else {
 			commitInterval := &entry.CommitInfo{
-				Group:    "group1",
+				Group:    1,
 				CommitId: common.NextGlobalSeqNum(),
 			}
 			e.SetInfo(commitInterval)
@@ -119,9 +118,9 @@ func TestMultiGroup(t *testing.T) {
 			case e := <-ch:
 				err := e.WaitDone()
 				assert.Nil(t, err)
-				t.Logf("synced %d", s.GetSynced("group1"))
-				t.Logf("checkpointed %d", s.GetCheckpointed("group1"))
-				t.Logf("penddings %d", s.GetPenddings("group1"))
+				t.Logf("synced %d", s.GetSynced(1))
+				t.Logf("checkpointed %d", s.GetCheckpointed(1))
+				t.Logf("penddings %d", s.GetPenddings(1))
 				fwg.Done()
 			}
 		}
@@ -137,17 +136,16 @@ func TestMultiGroup(t *testing.T) {
 	groupCnt := 5
 	worker, _ := ants.NewPool(groupCnt)
 	fwg.Add(entryPerGroup * groupCnt)
-	f := func(groupNo int) func() {
+	f := func(groupNo uint32) func() {
 		return func() {
-			groupName := "group" + strconv.Itoa(groupNo)
 			alloc := &common.IdAllocator{}
 			ckp := uint64(0)
 			for i := 0; i < entryPerGroup; i++ {
 				e := entry.GetBase()
 				if i%1000 == 0 && i > 0 {
-					checkpoints := make(map[string]*common.ClosedInterval)
+					checkpoints := make(map[uint32]*common.ClosedInterval)
 					end := alloc.Get()
-					checkpoints["group1"] = &common.ClosedInterval{
+					checkpoints[1] = &common.ClosedInterval{
 						Start: ckp,
 						End:   end,
 					}
@@ -159,7 +157,7 @@ func TestMultiGroup(t *testing.T) {
 					e.SetType(entry.ETCheckpoint)
 				} else {
 					commitInterval := &entry.CommitInfo{
-						Group:    groupName,
+						Group:    groupNo,
 						CommitId: alloc.Alloc(),
 					}
 					e.SetInfo(commitInterval)
@@ -176,7 +174,7 @@ func TestMultiGroup(t *testing.T) {
 	}
 
 	for j := 0; j < groupCnt; j++ {
-		worker.Submit(f(j))
+		worker.Submit(f(uint32(j)))
 	}
 
 	fwg.Wait()
@@ -215,9 +213,9 @@ func TestUncommitEntry(t *testing.T) {
 			case e := <-ch:
 				err := e.WaitDone()
 				assert.Nil(t, err)
-				t.Logf("synced %d", s.GetSynced("group1"))
-				t.Logf("checkpointed %d", s.GetCheckpointed("group1"))
-				t.Logf("penddings %d", s.GetPenddings("group1"))
+				t.Logf("synced %d", s.GetSynced(1))
+				t.Logf("checkpointed %d", s.GetCheckpointed(1))
+				t.Logf("penddings %d", s.GetPenddings(1))
 				fwg.Done()
 			}
 		}
@@ -233,9 +231,8 @@ func TestUncommitEntry(t *testing.T) {
 	groupCnt := 1
 	worker, _ := ants.NewPool(groupCnt)
 	fwg.Add(entryPerGroup * groupCnt)
-	f := func(groupNo int) func() {
+	f := func(groupNo uint32) func() {
 		return func() {
-			groupName := "group" + strconv.Itoa(groupNo)
 			cidAlloc := &common.IdAllocator{}
 			tidAlloc := &common.IdAllocator{}
 			ckp := uint64(0)
@@ -243,18 +240,18 @@ func TestUncommitEntry(t *testing.T) {
 				e := entry.GetBase()
 				switch i % 100 {
 				case 1, 2, 3, 4, 5:
-					tids := make(map[string][]uint64)
-					tids[groupName] = make([]uint64, 0)
-					tids[groupName] = append(tids[groupName], tidAlloc.Get()+1+uint64(rand.Intn(3)))
+					tids := make(map[uint32][]uint64)
+					tids[groupNo] = make([]uint64, 0)
+					tids[groupNo] = append(tids[groupNo], tidAlloc.Get()+1+uint64(rand.Intn(3)))
 					uncommitInfo := &entry.UncommitInfo{
 						Tids: tids,
 					}
 					e.SetType(entry.ETUncommitted)
 					e.SetInfo(uncommitInfo)
 				case 99:
-					checkpoints := make(map[string]*common.ClosedInterval)
+					checkpoints := make(map[uint32]*common.ClosedInterval)
 					end := cidAlloc.Get()
-					checkpoints["group1"] = &common.ClosedInterval{
+					checkpoints[1] = &common.ClosedInterval{
 						Start: ckp,
 						End:   end,
 					}
@@ -266,7 +263,7 @@ func TestUncommitEntry(t *testing.T) {
 					e.SetInfo(checkpointInfo)
 				case 50, 51, 52, 53:
 					txnInfo := &entry.TxnInfo{
-						Group:    groupName,
+						Group:    groupNo,
 						Tid:      tidAlloc.Alloc(),
 						CommitId: cidAlloc.Alloc(),
 					}
@@ -274,7 +271,7 @@ func TestUncommitEntry(t *testing.T) {
 					e.SetInfo(txnInfo)
 				default:
 					commitInterval := &entry.CommitInfo{
-						Group:    groupName,
+						Group:    groupNo,
 						CommitId: cidAlloc.Alloc(),
 					}
 					e.SetType(entry.ETCustomizedStart)
@@ -291,7 +288,7 @@ func TestUncommitEntry(t *testing.T) {
 	}
 
 	for j := 0; j < groupCnt; j++ {
-		worker.Submit(f(j))
+		worker.Submit(f(uint32(j)))
 	}
 
 	fwg.Wait()
@@ -340,9 +337,8 @@ func TestReplay(t *testing.T) {
 	groupCnt := 2
 	worker, _ := ants.NewPool(groupCnt)
 	fwg.Add(entryPerGroup * groupCnt)
-	f := func(groupNo int) func() {
+	f := func(groupNo uint32) func() {
 		return func() {
-			groupName := "group" + strconv.Itoa(groupNo)
 			cidAlloc := &common.IdAllocator{}
 			tidAlloc := &common.IdAllocator{}
 			ckp := uint64(0)
@@ -351,9 +347,9 @@ func TestReplay(t *testing.T) {
 				switch i % 50 {
 				case 1, 2, 3, 4, 5: //uncommit entry
 					e.SetType(entry.ETUncommitted)
-					tids := make(map[string][]uint64)
-					tids[groupName] = make([]uint64, 0)
-					tids[groupName] = append(tids[groupName], tidAlloc.Get()+1+uint64(rand.Intn(3)))
+					tids := make(map[uint32][]uint64)
+					tids[groupNo] = make([]uint64, 0)
+					tids[groupNo] = append(tids[groupNo], tidAlloc.Get()+1+uint64(rand.Intn(3)))
 					uncommitInfo := &entry.UncommitInfo{
 						Tids: tids,
 					}
@@ -367,9 +363,9 @@ func TestReplay(t *testing.T) {
 					e.UnmarshalFromNode(n, true)
 				case 49: //ckp entry
 					e.SetType(entry.ETCheckpoint)
-					checkpoints := make(map[string]*common.ClosedInterval)
+					checkpoints := make(map[uint32]*common.ClosedInterval)
 					end := cidAlloc.Get()
-					checkpoints["group1"] = &common.ClosedInterval{
+					checkpoints[1] = &common.ClosedInterval{
 						Start: ckp,
 						End:   end,
 					}
@@ -387,7 +383,7 @@ func TestReplay(t *testing.T) {
 				case 20, 21, 22, 23: //txn entry
 					e.SetType(entry.ETTxn)
 					txnInfo := &entry.TxnInfo{
-						Group:    groupName,
+						Group:    groupNo,
 						Tid:      tidAlloc.Alloc(),
 						CommitId: cidAlloc.Alloc(),
 					}
@@ -405,7 +401,7 @@ func TestReplay(t *testing.T) {
 				default: //commit entry
 					e.SetType(entry.ETCustomizedStart)
 					commitInterval := &entry.CommitInfo{
-						Group:    groupName,
+						Group:    groupNo,
 						CommitId: cidAlloc.Alloc(),
 					}
 					e.SetInfo(commitInterval)
@@ -423,7 +419,7 @@ func TestReplay(t *testing.T) {
 	}
 
 	for j := 0; j < groupCnt; j++ {
-		worker.Submit(f(j))
+		worker.Submit(f(uint32(j)))
 	}
 
 	fwg.Wait()
@@ -438,7 +434,7 @@ func TestReplay(t *testing.T) {
 	s.Close()
 
 	s, _ = NewBaseStore(dir, name, cfg)
-	a := func(group string, commitId uint64, payload []byte, typ uint16, info interface{}) (err error) {
+	a := func(group uint32, commitId uint64, payload []byte, typ uint16, info interface{}) (err error) {
 		fmt.Printf("%s", payload)
 		return nil
 	}

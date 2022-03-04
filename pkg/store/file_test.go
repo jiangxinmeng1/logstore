@@ -95,8 +95,8 @@ func TestAppender(t *testing.T) {
 		appender := rf.GetAppender()
 		assert.NotNil(t, appender)
 		if i%4 == 0 && i > 0 {
-			checkpoints := make(map[string]*common.ClosedInterval)
-			checkpoints["group1"] = &common.ClosedInterval{
+			checkpoints := make(map[uint32]*common.ClosedInterval)
+			checkpoints[1] = &common.ClosedInterval{
 				Start: 0,
 				End:   common.GetGlobalSeqNum(),
 			}
@@ -107,7 +107,7 @@ func TestAppender(t *testing.T) {
 			assert.Nil(t, err)
 		} else {
 			commitInfo := &entry.CommitInfo{
-				Group:    "group1",
+				Group:    1,
 				CommitId: common.NextGlobalSeqNum(),
 			}
 			err = appender.Prepare(len(toWrite), commitInfo)
@@ -147,16 +147,16 @@ func TestVInfo(t *testing.T) {
 	vinfo := *newVInfo()
 	end := 10
 	for i := 0; i <= end; i++ {
-		commitInfo := &entry.CommitInfo{Group: "group1", CommitId: uint64(i)}
+		commitInfo := &entry.CommitInfo{Group: 1, CommitId: uint64(i)}
 		err := vinfo.LogCommit(commitInfo)
 		assert.Nil(t, err)
 	}
-	assert.Equal(t, uint64(end), vinfo.Commits["group1"].End)
-	commitInfo := &entry.CommitInfo{Group: "group1", CommitId: uint64(end + 2)}
+	assert.Equal(t, uint64(end), vinfo.Commits[1].End)
+	commitInfo := &entry.CommitInfo{Group: 1, CommitId: uint64(end + 2)}
 	err := vinfo.LogCommit(commitInfo)
 	assert.NotNil(t, err)
-	checkpoints := make(map[string]*common.ClosedInterval)
-	checkpoints["group1"] = &common.ClosedInterval{
+	checkpoints := make(map[uint32]*common.ClosedInterval)
+	checkpoints[1] = &common.ClosedInterval{
 		Start: 0,
 		End:   uint64(end / 2),
 	}
@@ -192,8 +192,8 @@ func TestReadVInfo(t *testing.T) {
 		appender := rf.GetAppender()
 		assert.NotNil(t, appender)
 		if i%4 == 0 && i > 0 {
-			checkpoints := make(map[string]*common.ClosedInterval)
-			checkpoints["group1"] = &common.ClosedInterval{
+			checkpoints := make(map[uint32]*common.ClosedInterval)
+			checkpoints[1] = &common.ClosedInterval{
 				Start: 0,
 				End:   common.GetGlobalSeqNum(),
 			}
@@ -203,7 +203,7 @@ func TestReadVInfo(t *testing.T) {
 			appender.Prepare(len(toWrite), checkpointInfo)
 		} else {
 			commitInfo := &entry.CommitInfo{
-				Group:    "group1",
+				Group:    1,
 				CommitId: common.NextGlobalSeqNum(),
 			}
 			appender.Prepare(len(toWrite), commitInfo)

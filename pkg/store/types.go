@@ -25,11 +25,11 @@ type VFile interface {
 	Id() int
 	Name() string
 	String() string
-	InCheckpoint(map[string]*common.ClosedInterval) bool
-	InCommits(map[string]*common.ClosedInterval) bool
-	InTxnCommits(map[string]map[uint64]uint64, map[string]*common.ClosedInterval) bool
-	MergeCheckpoint(*map[string]*common.ClosedInterval)
-	MergeTidCidMap(map[string]map[uint64]uint64)
+	InCheckpoint(map[uint32]*common.ClosedInterval) bool
+	InCommits(map[uint32]*common.ClosedInterval) bool
+	InTxnCommits(map[uint32]map[uint64]uint64, map[uint32]*common.ClosedInterval) bool
+	MergeCheckpoint(*map[uint32]*common.ClosedInterval)
+	MergeTidCidMap(map[uint32]map[uint64]uint64)
 	Replay(ReplayHandle, ReplayObserver) error
 }
 
@@ -71,7 +71,7 @@ type History interface {
 	TryTruncate() error
 }
 
-type ApplyHandle = func(group string, commitId uint64, payload []byte, typ uint16, info interface{}) (err error)
+type ApplyHandle = func(group uint32, commitId uint64, payload []byte, typ uint16, info interface{}) (err error)
 
 type File interface {
 	io.Closer
@@ -91,8 +91,8 @@ type Store interface {
 	io.Closer
 	Sync() error
 	Replay(ApplyHandle) error
-	GetCheckpointed(string) uint64
-	GetSynced(string) uint64
+	GetCheckpointed(uint32) uint64
+	GetSynced(uint32) uint64
 	AppendEntry(entry.Entry) error
 	TryCompact() error
 	TryTruncate(int64) error
