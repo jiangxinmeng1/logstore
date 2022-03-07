@@ -255,3 +255,18 @@ func (vf *vFile) OnNewUncommit(addrs []*VFileAddress) {
 		}
 	}
 }
+
+func (vf *vFile) Load(groupId uint32, lsn uint64) (entry.Entry, error) {
+	offset, err := vf.GetOffsetByLSN(groupId, lsn)
+	if err != nil {
+		return nil, err
+	}
+	entry := entry.GetBase()
+	metaBuf := entry.GetMetaBuf()
+	_, err = vf.ReadAt(metaBuf, int64(offset))
+	if err != nil {
+		return nil, err
+	}
+	_, err = entry.ReadAt(vf.File, offset)
+	return entry, err
+}

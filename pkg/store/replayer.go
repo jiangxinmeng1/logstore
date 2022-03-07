@@ -110,6 +110,12 @@ func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
 		infobuf := e.GetInfoBuf()
 		info := &entry.Info{}
 		json.Unmarshal(infobuf, info)
+		info.Info=&VFileAddress{
+			Group: info.Group,
+			LSN: info.GroupLSN,
+			Version: r.version,
+			Offset: r.state.pos,
+		}
 		replayEty := &replayEntry{
 			entryType: typ,
 			payload:   make([]byte, e.GetPayloadSize()),
@@ -160,6 +166,12 @@ func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
 		infobuf := e.GetInfoBuf()
 		info := &entry.Info{}
 		json.Unmarshal(infobuf, info)
+		info.Info=&VFileAddress{
+			Group: info.Group,
+			LSN: info.GroupLSN,
+			Version: r.version,
+			Offset: r.state.pos,
+		}
 		replayEty := &replayEntry{
 			entryType: e.GetType(),
 			group:     info.Group,
@@ -175,6 +187,12 @@ func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
 		infobuf := e.GetInfoBuf()
 		info := &entry.Info{}
 		json.Unmarshal(infobuf, info)
+		info.Info=&VFileAddress{
+			Group: info.Group,
+			LSN: info.GroupLSN,
+			Version: r.version,
+			Offset: r.state.pos,
+		}
 		replayEty := &replayEntry{
 			entryType: e.GetType(),
 			group:     info.Group,

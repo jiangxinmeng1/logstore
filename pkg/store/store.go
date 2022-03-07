@@ -93,6 +93,7 @@ func (bs *baseStore) PrepareEntry(e entry.Entry) (entry.Entry, error) {
 		return e, nil
 	}
 	v := v1.(*entry.Info)
+	v.Info = &VFileAddress{}
 	switch v.Group {
 	case entry.GTUncommit:
 		addrs := make([]*VFileAddress, 0)
@@ -127,11 +128,11 @@ func (bs *baseStore) PrepareEntry(e entry.Entry) (entry.Entry, error) {
 func (bs *baseStore) onEntries(entries []entry.Entry) {
 	var err error
 	for _, e := range entries {
+		appender := bs.file.GetAppender()
 		e, err := bs.PrepareEntry(e)
 		if err != nil {
 			panic(err)
 		}
-		appender := bs.file.GetAppender()
 		if err = appender.Prepare(e.TotalSize(), e.GetInfo()); err != nil {
 			panic(err)
 		}
@@ -215,4 +216,12 @@ func (s *baseStore) Replay(h ApplyHandle) error {
 	//TODO uncommit entry info
 	r.Apply()
 	return nil
+}
+
+func (s *baseStore) Load(groupId uint32, lsn uint64) (entry.Entry, error) {
+	ver, err := s.GetVersionByGLSN(groupId, lsn)
+	if err != nil {
+		return nil, err
+	}
+	return s.file.Load(ver, groupId, lsn)
 }

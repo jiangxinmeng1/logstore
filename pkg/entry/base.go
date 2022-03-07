@@ -3,6 +3,7 @@ package entry
 import (
 	"fmt"
 	"io"
+	"os"
 	"sync"
 
 	"github.com/jiangxinmeng1/logstore/pkg/common"
@@ -60,17 +61,20 @@ func (info *Info) ToString() string {
 		for _, ranges := range info.Checkpoints {
 			s = fmt.Sprintf("%s G%d-%v", s, ranges.Group, ranges.Ranges)
 		}
+		s = fmt.Sprintf("%s\n",s)
 		return s
 	case GTUncommit:
 		s := "uncommit entry"
 		for _, tid := range info.Uncommits {
 			s = fmt.Sprintf("%s G%d-%d", s, tid.Group, tid.Tid)
 		}
+		s = fmt.Sprintf("%s\n",s)
+		return s
 	default:
 		s := fmt.Sprintf("customized entry G%d<%d>{T%d,C%d}", info.Group, info.GroupLSN, info.TxnId, info.CommitId)
+		s = fmt.Sprintf("%s\n",s)
 		return s
 	}
-	return ""
 }
 
 type Tid struct {
@@ -208,6 +212,26 @@ func (b *Base) ReadFrom(r io.Reader) (int, error) {
 	}
 	b.SetInfoBuf(infoBuf)
 	n2, err := r.Read(b.payload)
+	if err != nil {
+		return n2, err
+	}
+	return n1 + n2, nil
+}
+
+func (b *Base) ReadAt(r *os.File, offset int) (int, error) {
+	if b.node == nil {
+		b.node = common.GPool.Alloc(uint64(b.GetPayloadSize()))
+		b.payload = b.node.Buf[:b.GetPayloadSize()]
+	}
+	offset += len(b.GetMetaBuf())
+	infoBuf := make([]byte, b.GetInfoSize())
+	n1, err := r.ReadAt(infoBuf, int64(offset))
+	if err != nil {
+		return n1, err
+	}
+	offset += n1
+	b.SetInfoBuf(infoBuf)
+	n2, err := r.ReadAt(b.payload, int64(offset))
 	if err != nil {
 		return n2, err
 	}

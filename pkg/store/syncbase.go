@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"sync"
 
 	"github.com/jiangxinmeng1/logstore/pkg/common"
@@ -13,6 +14,7 @@ type syncBase struct {
 	checkpointed, synced   *syncMap
 	uncommits              map[uint32][]uint64
 	addrs                  map[uint32]map[int]common.ClosedInterval //group-version-glsn range
+	addrmu                 sync.RWMutex
 }
 
 type syncMap struct {
@@ -33,7 +35,24 @@ func newSyncBase() *syncBase {
 		checkpointed:  newSyncMap(),
 		synced:        newSyncMap(),
 		uncommits:     make(map[uint32][]uint64),
+		addrs:         make(map[uint32]map[int]common.ClosedInterval),
+		addrmu:        sync.RWMutex{},
 	}
+}
+
+func (base *syncBase) GetVersionByGLSN(groupId uint32, lsn uint64) (int, error) {
+	base.addrmu.RLock()
+	defer base.addrmu.RUnlock()
+	versionsMap, ok := base.addrs[groupId]
+	if !ok {
+		return 0, errors.New("group not existed")
+	}
+	for ver, interval := range versionsMap {
+		if interval.Contains(common.ClosedInterval{Start: lsn, End: lsn}) {
+			return ver, nil
+		}
+	}
+	return 0, errors.New("lsn not existed")
 }
 
 //TODO
@@ -56,25 +75,39 @@ func (base *syncBase) OnEntryReceived(e entry.Entry) error {
 		case entry.GTUncommit:
 			// addr := v.Addr.(*VFileAddress)
 			for _, tid := range v.Uncommits {
-					tids, ok := base.uncommits[tid.Group]
-					if !ok {
-						tids = make([]uint64, 0)
+				tids, ok := base.uncommits[tid.Group]
+				if !ok {
+					tids = make([]uint64, 0)
+				}
+				existed := false
+				for _, id := range tids {
+					if id == tid.Tid {
+						existed = true
+						break
 					}
-					existed := false
-					for _, id := range tids {
-						if id == tid.Tid {
-							existed = true
-							break
-						}
-					}
-					if !existed {
-						tids = append(tids, tid.Tid)
-					}
-					base.uncommits[tid.Group] = tids
+				}
+				if !existed {
+					tids = append(tids, tid.Tid)
+				}
+				base.uncommits[tid.Group] = tids
 			}
 		default:
 			base.syncing[v.Group] = v.CommitId
 		}
+		base.addrmu.Lock()
+		defer base.addrmu.Unlock()
+		addr := v.Info.(*VFileAddress)
+		versionRanges, ok := base.addrs[addr.Group]
+		if !ok {
+			versionRanges = make(map[int]common.ClosedInterval)
+		}
+		interval, ok := versionRanges[addr.Version]
+		if !ok {
+			interval = common.ClosedInterval{}
+		}
+		interval.TryMerge(common.ClosedInterval{Start: addr.LSN, End: addr.LSN})
+		versionRanges[addr.Version] = interval
+		base.addrs[addr.Group] = versionRanges
 	}
 	return nil
 }

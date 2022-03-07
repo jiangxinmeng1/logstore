@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/jiangxinmeng1/logstore/pkg/common"
-	"github.com/jiangxinmeng1/logstore/pkg/entry"
 	"math/rand"
 	"os"
 	"sync"
 	"testing"
+	// "time"
+
+	"github.com/jiangxinmeng1/logstore/pkg/common"
+	"github.com/jiangxinmeng1/logstore/pkg/entry"
 
 	"github.com/panjf2000/ants/v2"
 	"github.com/stretchr/testify/assert"
@@ -395,7 +397,7 @@ func TestReplay(t *testing.T) {
 					e.SetType(entry.ETTxn)
 					txnInfo := &entry.Info{
 						Group:    groupNo,
-						TxnId:      tidAlloc.Alloc(),
+						TxnId:    tidAlloc.Alloc(),
 						CommitId: cidAlloc.Alloc(),
 					}
 					e.SetInfo(txnInfo)
@@ -444,6 +446,178 @@ func TestReplay(t *testing.T) {
 
 	s.Close()
 
+	s, _ = NewBaseStore(dir, name, cfg)
+	a := func(group uint32, commitId uint64, payload []byte, typ uint16, info interface{}) (err error) {
+		fmt.Printf("%s", payload)
+		return nil
+	}
+	r := newReplayer(a)
+	o := &noopObserver{}
+	err = s.file.Replay(r.replayHandler, o)
+	if err != nil {
+		fmt.Printf("err is %v", err)
+	}
+	r.Apply()
+	s.Close()
+}
+
+func TestLoad(t *testing.T) {
+	dir := "/tmp/logstore/teststore"
+	name := "mock"
+	os.RemoveAll(dir)
+	cfg := &StoreCfg{
+		RotateChecker: NewMaxSizeRotateChecker(int(common.K) * 2000),
+	}
+	s, err := NewBaseStore(dir, name, cfg)
+	assert.Nil(t, err)
+
+	var wg sync.WaitGroup
+	var fwg sync.WaitGroup
+	ch := make(chan entry.Entry, 1000)
+	ctx, cancel := context.WithCancel(context.Background())
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case e := <-ch:
+				err := e.WaitDone()
+				assert.Nil(t, err)
+				infoin := e.GetInfo()
+				fmt.Printf("entry is %s", e.GetPayload())
+				if infoin != nil {
+					info := infoin.(*entry.Info)
+					var loadedEntry entry.Entry
+					for i := 0; i < 5; i++ {
+						loadedEntry, err = s.Load(info.Group, info.GroupLSN)
+						fmt.Printf("loaded entry is %s", loadedEntry.GetPayload())
+						if err == nil {
+							break
+						}
+						// time.Sleep(time.Millisecond * 500)
+					}
+					assert.Nil(t, err)
+					// t.Logf("synced %d", s.GetSynced("group1"))
+					// t.Logf("checkpointed %d", s.GetCheckpointed("group1"))
+					// t.Logf("penddings %d", s.GetPenddings("group1"))
+				}
+				fwg.Done()
+			}
+		}
+	}()
+
+	entryPerGroup := 50
+	groupCnt := 2
+	worker, _ := ants.NewPool(groupCnt)
+	fwg.Add(entryPerGroup * groupCnt)
+	uncommitLSN := &common.IdAllocator{}
+	ckpLSN := &common.IdAllocator{}
+	f := func(groupNo uint32) func() {
+		return func() {
+			cidAlloc := &common.IdAllocator{}
+			tidAlloc := &common.IdAllocator{}
+			lsnAlloc := &common.IdAllocator{}
+			ckp := uint64(0)
+			for i := 0; i < entryPerGroup; i++ {
+				e := entry.GetBase()
+				switch i % 50 {
+				case 1, 2, 3, 4, 5: //uncommit entry
+					e.SetType(entry.ETUncommitted)
+					uncommitInfo := &entry.Info{
+						Group: entry.GTUncommit,
+						GroupLSN: uncommitLSN.Alloc(),
+						Uncommits: []entry.Tid{{
+							Group: groupNo,
+							Tid:   tidAlloc.Get() + 1 + uint64(rand.Intn(3)),
+						}},
+					}
+					e.SetInfo(uncommitInfo)
+					str := uncommitInfo.ToString()
+					buf := []byte(str)
+					n := common.GPool.Alloc(uint64(len(buf)))
+					n.Buf = n.Buf[:len(buf)]
+					copy(n.GetBuf(), buf)
+					e.UnmarshalFromNode(n, true)
+				case 49: //ckp entry
+					e.SetType(entry.ETCheckpoint)
+					end := cidAlloc.Get()
+					checkpointInfo := &entry.Info{
+						Group: entry.GTCKp,
+						GroupLSN: ckpLSN.Alloc(),
+						Checkpoints: []entry.CkpRanges{{
+							Group: 1,
+							Ranges: []common.ClosedInterval{{
+								Start: ckp,
+								End:   end,
+							}},
+						}},
+					}
+					ckp = end
+					e.SetInfo(checkpointInfo)
+					str := checkpointInfo.ToString()
+					buf := []byte(str)
+					n := common.GPool.Alloc(uint64(len(buf)))
+					n.Buf = n.Buf[:len(buf)]
+					copy(n.GetBuf(), buf)
+					e.UnmarshalFromNode(n, true)
+				case 20, 21, 22, 23: //txn entry
+					e.SetType(entry.ETTxn)
+					txnInfo := &entry.Info{
+						Group:    groupNo,
+						GroupLSN: lsnAlloc.Alloc(),
+						TxnId:    tidAlloc.Alloc(),
+						CommitId: cidAlloc.Alloc(),
+					}
+					e.SetInfo(txnInfo)
+					str := txnInfo.ToString()
+					buf := []byte(str)
+					n := common.GPool.Alloc(uint64(len(buf)))
+					n.Buf = n.Buf[:len(buf)]
+					copy(n.GetBuf(), buf)
+					e.UnmarshalFromNode(n, true)
+				case 26, 28: //flush entry
+					e.SetType(entry.ETFlush)
+					payload := make([]byte, 0)
+					e.Unmarshal(payload)
+				default: //commit entry
+					e.SetType(entry.ETCustomizedStart)
+					commitInterval := &entry.Info{
+						Group:    groupNo,
+						GroupLSN: lsnAlloc.Alloc(),
+						CommitId: cidAlloc.Alloc(),
+					}
+					e.SetInfo(commitInterval)
+					str := commitInterval.ToString()
+					buf := []byte(str)
+					n := common.GPool.Alloc(uint64(len(buf)))
+					n.Buf = n.Buf[:len(buf)]
+					copy(n.GetBuf(), buf)
+					e.UnmarshalFromNode(n, true)
+				}
+				s.AppendEntry(e)
+				ch <- e
+			}
+		}
+	}
+
+	for j := entry.GTCustomizedStart; j < entry.GTCustomizedStart+uint32(groupCnt); j++ {
+		worker.Submit(f(uint32(j)))
+	}
+
+	fwg.Wait()
+	cancel()
+	wg.Wait()
+
+	h := s.file.GetHistory()
+	// t.Log(h.String())
+	err = h.TryTruncate()
+	assert.Nil(t, err)
+
+	s.Close()
+
+	fmt.Printf("\n***********replay***********\n\n")
 	s, _ = NewBaseStore(dir, name, cfg)
 	a := func(group uint32, commitId uint64, payload []byte, typ uint16, info interface{}) (err error) {
 		fmt.Printf("%s", payload)

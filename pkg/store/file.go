@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/jiangxinmeng1/logstore/pkg/common"
 	"io/ioutil"
 	"os"
 	"path"
@@ -13,6 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/jiangxinmeng1/logstore/pkg/common"
+	"github.com/jiangxinmeng1/logstore/pkg/entry"
 )
 
 var suffix = ".rot"
@@ -109,7 +111,7 @@ func OpenRotateFile(dir, name string, mu *sync.RWMutex, rotateChecker RotateChec
 			}
 			vf := &vFile{
 				vInfo:      *newVInfo(),
-				RWMutex:    &sync.RWMutex{}, 
+				RWMutex:    &sync.RWMutex{},
 				File:       file,
 				version:    version,
 				commitCond: *sync.NewCond(new(sync.Mutex)),
@@ -276,4 +278,26 @@ func (rf *rotateFile) Sync() error {
 	rf.RUnlock()
 	waitFile.WaitCommitted()
 	return lastFile.Sync()
+}
+
+func (rf *rotateFile) Load(ver int, groupId uint32, lsn uint64) (entry.Entry, error) {
+	vf, err := rf.GetEntryByVersion(ver)
+	if err != nil {
+		return nil, err
+	}
+	return vf.Load(groupId, lsn)
+}
+
+func (rf *rotateFile) GetEntryByVersion(version int) (VFile, error) {
+	var vf VFile
+	for _, vf := range rf.uncommitted {
+		if vf.version == version {
+			return vf, nil
+		}
+	}
+	vf = rf.GetHistory().GetEntry(version)
+	if vf != nil {
+		return vf, nil
+	}
+	return nil, errors.New("version not existed")
 }

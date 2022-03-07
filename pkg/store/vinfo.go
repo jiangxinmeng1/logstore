@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"sync"
 
 	// "errors"
 	"fmt"
@@ -21,7 +22,8 @@ type vInfo struct {
 	// TxnCommit   map[uint32]*roaring64.Bitmap
 	TidCidMap map[uint32]map[uint64]uint64
 
-	Addrs map[uint32]map[uint64]int //group-groupLSN-offset
+	Addrs  map[uint32]map[uint64]int //group-groupLSN-offset
+	addrmu sync.RWMutex
 }
 
 type VFileUncommitInfo struct {
@@ -67,6 +69,8 @@ func newVInfo() *vInfo {
 		UncommitTxn: make(map[uint32][]uint64),
 		// TxnCommit:   make(map[string]*roaring64.Bitmap),
 		TidCidMap: make(map[uint32]map[uint64]uint64),
+		Addrs:     make(map[uint32]map[uint64]int),
+		addrmu:    sync.RWMutex{},
 	}
 }
 
@@ -196,14 +200,29 @@ func (info *vInfo) Log(v interface{}) error {
 		return nil
 	}
 	vi := v.(*entry.Info)
+	var err error
 	switch vi.Group {
 	case entry.GTCKp:
-		return info.LogCheckpoint(vi)
+		err = info.LogCheckpoint(vi)
 	case entry.GTUncommit:
-		return info.LogUncommitInfo(vi)
+		err = info.LogUncommitInfo(vi)
 	default:
-		return info.LogCommit(vi)
+		err = info.LogCommit(vi)
 	}
+	if err != nil {
+		return err
+	}
+	info.addrmu.Lock()
+	defer info.addrmu.Unlock()
+	addr := vi.Info.(*VFileAddress)
+	addrsMap, ok := info.Addrs[addr.Group]
+	if !ok {
+		addrsMap = make(map[uint64]int)
+	}
+	addrsMap[addr.LSN] = addr.Offset
+	info.Addrs[addr.Group] = addrsMap
+	// fmt.Printf("%p|addrs are %v\n", info, info.Addrs)
+	return nil
 }
 
 func (info *vInfo) LogTxnInfo(txnInfo *entry.Info) error {
@@ -257,7 +276,7 @@ func (info *vInfo) LogCheckpoint(checkpointInfo *entry.Info) error {
 		if !ok {
 			ckps = make([]*common.ClosedInterval, 0)
 			ckps = append(ckps, &common.ClosedInterval{
-				Start: interval.Ranges[0].Start,//TODO Fuzzy ckp
+				Start: interval.Ranges[0].Start, //TODO Fuzzy ckp
 				End:   interval.Ranges[0].End,
 			})
 			info.Checkpoints[interval.Group] = ckps
@@ -279,4 +298,19 @@ func (info *vInfo) LogCheckpoint(checkpointInfo *entry.Info) error {
 
 	}
 	return nil
+}
+
+func (info *vInfo) GetOffsetByLSN(groupId uint32, lsn uint64) (int, error) {
+	info.addrmu.RLock()
+	defer info.addrmu.RUnlock()
+	lsnMap, ok := info.Addrs[groupId]
+	if !ok {
+		// fmt.Printf("%p|addrs are %v\n", info, info.Addrs)
+		return 0, errors.New("group not existed")
+	}
+	offset, ok := lsnMap[lsn]
+	if !ok {
+		return 0, errors.New("lsn not existed")
+	}
+	return offset, nil
 }

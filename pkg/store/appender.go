@@ -29,18 +29,25 @@ func (appender *fileAppender) Prepare(size int, info interface{}) error {
 	if appender.syncWaited, appender.rollbackState, err = appender.rfile.makeSpace(size); err != nil {
 		return err
 	}
-	if info == nil{
+	if info == nil {
 		return nil
 	}
-	v:=info.(*entry.Info)
+	v := info.(*entry.Info)
 	switch v.Group {
-	case entry.GTUncommit:
+	// case entry.GTUncommit:
+	default:
 		var version int
 		if appender.syncWaited != nil {
 			version = appender.syncWaited.version + 1
+		} else {
+			version = 1
 		}
-		v.Info = &VFileAddress{Version: version, Offset: appender.rollbackState.pos}
-	default:
+		v.Info = &VFileAddress{
+			Group:   v.Group,
+			LSN:     v.GroupLSN,
+			Version: version,
+			Offset:  appender.rollbackState.pos,
+		}
 	}
 	appender.info = info
 	// appender.activeId = appender.rfile.idAlloc.Alloc()
