@@ -29,9 +29,17 @@ func (appender *fileAppender) Prepare(size int, info interface{}) error {
 	if appender.syncWaited, appender.rollbackState, err = appender.rfile.makeSpace(size); err != nil {
 		return err
 	}
-	switch v := info.(type) {
-	case *entry.UncommitInfo:
-		v.Addr = &VFileAddress{FileName: appender.rollbackState.file.Name(), Offset: appender.rollbackState.pos}
+	if info == nil{
+		return nil
+	}
+	v:=info.(*entry.Info)
+	switch v.Group {
+	case entry.GTUncommit:
+		var version int
+		if appender.syncWaited != nil {
+			version = appender.syncWaited.version + 1
+		}
+		v.Info = &VFileAddress{Version: version, Offset: appender.rollbackState.pos}
 	default:
 	}
 	appender.info = info

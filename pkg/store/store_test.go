@@ -56,18 +56,20 @@ func TestStore(t *testing.T) {
 	for i := 0; i < cnt; i++ {
 		e := entry.GetBase()
 		if i%2 == 0 && i > 0 {
-			checkpoints := make(map[uint32]*common.ClosedInterval)
-			checkpoints[1] = &common.ClosedInterval{
-				End: common.GetGlobalSeqNum(),
-			}
-			checkpointInfo := &entry.CheckpointInfo{
-				CheckpointRanges: checkpoints,
+			checkpointInfo := &entry.Info{
+				Group: entry.GTCKp,
+				Checkpoints: []entry.CkpRanges{{
+					Group: 1,
+					Ranges: []common.ClosedInterval{{
+						End: common.GetGlobalSeqNum(),
+					}},
+				}},
 			}
 			e.SetInfo(checkpointInfo)
 			e.SetType(entry.ETCheckpoint)
 		} else {
-			commitInterval := &entry.CommitInfo{
-				Group:    1,
+			commitInterval := &entry.Info{
+				Group:    entry.GTCustomizedStart,
 				CommitId: common.NextGlobalSeqNum(),
 			}
 			e.SetInfo(commitInterval)
@@ -143,20 +145,22 @@ func TestMultiGroup(t *testing.T) {
 			for i := 0; i < entryPerGroup; i++ {
 				e := entry.GetBase()
 				if i%1000 == 0 && i > 0 {
-					checkpoints := make(map[uint32]*common.ClosedInterval)
 					end := alloc.Get()
-					checkpoints[1] = &common.ClosedInterval{
-						Start: ckp,
-						End:   end,
-					}
-					checkpointInfo := &entry.CheckpointInfo{
-						CheckpointRanges: checkpoints,
+					checkpointInfo := &entry.Info{
+						Group: entry.GTCKp,
+						Checkpoints: []entry.CkpRanges{{
+							Group: 1,
+							Ranges: []common.ClosedInterval{{
+								Start: ckp,
+								End:   end,
+							}},
+						}},
 					}
 					ckp = end
 					e.SetInfo(checkpointInfo)
 					e.SetType(entry.ETCheckpoint)
 				} else {
-					commitInterval := &entry.CommitInfo{
+					commitInterval := &entry.Info{
 						Group:    groupNo,
 						CommitId: alloc.Alloc(),
 					}
@@ -174,7 +178,8 @@ func TestMultiGroup(t *testing.T) {
 	}
 
 	for j := 0; j < groupCnt; j++ {
-		worker.Submit(f(uint32(j)))
+		no := uint32(j) + entry.GTCustomizedStart
+		worker.Submit(f(no))
 	}
 
 	fwg.Wait()
@@ -240,37 +245,40 @@ func TestUncommitEntry(t *testing.T) {
 				e := entry.GetBase()
 				switch i % 100 {
 				case 1, 2, 3, 4, 5:
-					tids := make(map[uint32][]uint64)
-					tids[groupNo] = make([]uint64, 0)
-					tids[groupNo] = append(tids[groupNo], tidAlloc.Get()+1+uint64(rand.Intn(3)))
-					uncommitInfo := &entry.UncommitInfo{
-						Tids: tids,
+					uncommitInfo := &entry.Info{
+						Group: entry.GTUncommit,
+						Uncommits: []entry.Tid{{
+							Group: groupNo,
+							Tid:   tidAlloc.Get() + 1 + uint64(rand.Intn(3)),
+						}},
 					}
 					e.SetType(entry.ETUncommitted)
 					e.SetInfo(uncommitInfo)
 				case 99:
-					checkpoints := make(map[uint32]*common.ClosedInterval)
 					end := cidAlloc.Get()
-					checkpoints[1] = &common.ClosedInterval{
-						Start: ckp,
-						End:   end,
-					}
-					checkpointInfo := &entry.CheckpointInfo{
-						CheckpointRanges: checkpoints,
+					checkpointInfo := &entry.Info{
+						Group: entry.GTCKp,
+						Checkpoints: []entry.CkpRanges{{
+							Group: 1,
+							Ranges: []common.ClosedInterval{{
+								Start: ckp,
+								End:   end,
+							}},
+						}},
 					}
 					ckp = end
 					e.SetType(entry.ETCheckpoint)
 					e.SetInfo(checkpointInfo)
 				case 50, 51, 52, 53:
-					txnInfo := &entry.TxnInfo{
+					txnInfo := &entry.Info{
 						Group:    groupNo,
-						Tid:      tidAlloc.Alloc(),
+						TxnId:    tidAlloc.Alloc(),
 						CommitId: cidAlloc.Alloc(),
 					}
 					e.SetType(entry.ETTxn)
 					e.SetInfo(txnInfo)
 				default:
-					commitInterval := &entry.CommitInfo{
+					commitInterval := &entry.Info{
 						Group:    groupNo,
 						CommitId: cidAlloc.Alloc(),
 					}
@@ -347,11 +355,12 @@ func TestReplay(t *testing.T) {
 				switch i % 50 {
 				case 1, 2, 3, 4, 5: //uncommit entry
 					e.SetType(entry.ETUncommitted)
-					tids := make(map[uint32][]uint64)
-					tids[groupNo] = make([]uint64, 0)
-					tids[groupNo] = append(tids[groupNo], tidAlloc.Get()+1+uint64(rand.Intn(3)))
-					uncommitInfo := &entry.UncommitInfo{
-						Tids: tids,
+					uncommitInfo := &entry.Info{
+						Group: entry.GTUncommit,
+						Uncommits: []entry.Tid{{
+							Group: groupNo,
+							Tid:   tidAlloc.Get() + 1 + uint64(rand.Intn(3)),
+						}},
 					}
 					fmt.Printf("%s", uncommitInfo.ToString())
 					e.SetInfo(uncommitInfo)
@@ -363,14 +372,16 @@ func TestReplay(t *testing.T) {
 					e.UnmarshalFromNode(n, true)
 				case 49: //ckp entry
 					e.SetType(entry.ETCheckpoint)
-					checkpoints := make(map[uint32]*common.ClosedInterval)
 					end := cidAlloc.Get()
-					checkpoints[1] = &common.ClosedInterval{
-						Start: ckp,
-						End:   end,
-					}
-					checkpointInfo := &entry.CheckpointInfo{
-						CheckpointRanges: checkpoints,
+					checkpointInfo := &entry.Info{
+						Group: entry.GTCKp,
+						Checkpoints: []entry.CkpRanges{{
+							Group: 1,
+							Ranges: []common.ClosedInterval{{
+								Start: ckp,
+								End:   end,
+							}},
+						}},
 					}
 					ckp = end
 					e.SetInfo(checkpointInfo)
@@ -382,9 +393,9 @@ func TestReplay(t *testing.T) {
 					e.UnmarshalFromNode(n, true)
 				case 20, 21, 22, 23: //txn entry
 					e.SetType(entry.ETTxn)
-					txnInfo := &entry.TxnInfo{
+					txnInfo := &entry.Info{
 						Group:    groupNo,
-						Tid:      tidAlloc.Alloc(),
+						TxnId:      tidAlloc.Alloc(),
 						CommitId: cidAlloc.Alloc(),
 					}
 					e.SetInfo(txnInfo)
@@ -400,7 +411,7 @@ func TestReplay(t *testing.T) {
 					e.Unmarshal(payload)
 				default: //commit entry
 					e.SetType(entry.ETCustomizedStart)
-					commitInterval := &entry.CommitInfo{
+					commitInterval := &entry.Info{
 						Group:    groupNo,
 						CommitId: cidAlloc.Alloc(),
 					}

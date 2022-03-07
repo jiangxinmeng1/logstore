@@ -228,13 +228,13 @@ func (vf *vFile) Replay(handle ReplayHandle, observer ReplayObserver) error {
 }
 
 func (vf *vFile) OnNewEntry(int) {}
-func (vf *vFile) OnNewCommit(info *entry.CommitInfo) {
+func (vf *vFile) OnNewCommit(info *entry.Info) {
 	vf.Log(info)
 }
-func (vf *vFile) OnNewCheckpoint(info *entry.CheckpointInfo) {
+func (vf *vFile) OnNewCheckpoint(info *entry.Info) {
 	vf.Log(info)
 }
-func (vf *vFile) OnNewTxn(info *entry.TxnInfo) {
+func (vf *vFile) OnNewTxn(info *entry.Info) {
 	vf.Log(info)
 }
 func (vf *vFile) OnNewUncommit(addrs []*VFileAddress) {
@@ -245,12 +245,12 @@ func (vf *vFile) OnNewUncommit(addrs []*VFileAddress) {
 			tids = make([]uint64, 0)
 		}
 		for _, tid := range tids {
-			if tid == addr.Tid {
+			if tid == addr.LSN {
 				exist = true
 			}
 		}
 		if !exist {
-			tids = append(tids, addr.Tid)
+			tids = append(tids, addr.LSN)
 			vf.UncommitTxn[addr.Group] = tids
 		}
 	}

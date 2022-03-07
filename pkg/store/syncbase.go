@@ -1,15 +1,18 @@
 package store
 
 import (
-	"github.com/jiangxinmeng1/logstore/pkg/entry"
 	"sync"
+
+	"github.com/jiangxinmeng1/logstore/pkg/common"
+	"github.com/jiangxinmeng1/logstore/pkg/entry"
 )
 
 type syncBase struct {
 	*sync.RWMutex
 	checkpointing, syncing map[uint32]uint64
 	checkpointed, synced   *syncMap
-	uncommits              map[uint32]map[uint64]*VFileAddress
+	uncommits              map[uint32][]uint64
+	addrs                  map[uint32]map[int]common.ClosedInterval //group-version-glsn range
 }
 
 type syncMap struct {
@@ -29,52 +32,48 @@ func newSyncBase() *syncBase {
 		syncing:       make(map[uint32]uint64),
 		checkpointed:  newSyncMap(),
 		synced:        newSyncMap(),
-		uncommits:     make(map[uint32]map[uint64]*VFileAddress),
+		uncommits:     make(map[uint32][]uint64),
 	}
 }
 
+//TODO
 func (base *syncBase) GetLastAddr(groupName uint32, tid uint64) *VFileAddress {
-	tidMap, ok := base.uncommits[groupName]
-	if !ok {
-		return nil
-	}
-	return tidMap[tid]
+	// tidMap, ok := base.uncommits[groupName]
+	// if !ok {
+	// 	return nil
+	// }
+	return nil
 }
 
 func (base *syncBase) OnEntryReceived(e entry.Entry) error {
 	if info := e.GetInfo(); info != nil {
-		switch v := info.(type) {
-		case *entry.CommitInfo:
-			base.syncing[v.Group] = v.CommitId
-		case *entry.CheckpointInfo:
-			for group, interval:= range v.CheckpointRanges{
-			base.checkpointing[group] = interval.End
+		v := info.(*entry.Info)
+		switch v.Group {
+		case entry.GTCKp:
+			for _, intervals := range v.Checkpoints {
+				base.checkpointing[intervals.Group] = intervals.Ranges[0].End
 			}
-		case *entry.UncommitInfo:
-			addr := v.Addr.(*VFileAddress)
-			for group, tids := range v.Tids {
-				for _, tid := range tids {
-					tidMap, ok := base.uncommits[group]
+		case entry.GTUncommit:
+			// addr := v.Addr.(*VFileAddress)
+			for _, tid := range v.Uncommits {
+					tids, ok := base.uncommits[tid.Group]
 					if !ok {
-						tidMap = make(map[uint64]*VFileAddress)
+						tids = make([]uint64, 0)
 					}
-					tidMap[tid] = addr
-					base.uncommits[group] = tidMap
-				}
+					existed := false
+					for _, id := range tids {
+						if id == tid.Tid {
+							existed = true
+							break
+						}
+					}
+					if !existed {
+						tids = append(tids, tid.Tid)
+					}
+					base.uncommits[tid.Group] = tids
 			}
-		case *entry.TxnInfo:
-			base.syncing[v.Group] = v.CommitId
-			tidMap, ok := base.uncommits[v.Group]
-			if !ok {
-				return nil
-			}
-			_, ok = tidMap[v.Tid]
-			if !ok {
-				return nil
-			}
-			delete(tidMap, v.Tid)
 		default:
-			panic("not supported")
+			base.syncing[v.Group] = v.CommitId
 		}
 	}
 	return nil

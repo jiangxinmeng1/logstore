@@ -17,6 +17,14 @@ const (
 	ETCustomizedStart
 )
 
+const (
+	GTInvalid uint32 = iota
+	GTNoop
+	GTCKp
+	GTUncommit
+	GTCustomizedStart
+)
+
 type Desc interface {
 	GetType() Type
 	SetType(Type)

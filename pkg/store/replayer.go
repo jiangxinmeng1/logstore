@@ -15,9 +15,9 @@ type noopObserver struct {
 func (o *noopObserver) OnNewEntry(_ int) {
 }
 
-func (o *noopObserver) OnNewCommit(*entry.CommitInfo)         {}
-func (o *noopObserver) OnNewCheckpoint(*entry.CheckpointInfo) {}
-func (o *noopObserver) OnNewTxn(*entry.TxnInfo)               {}
+func (o *noopObserver) OnNewCommit(*entry.Info)         {}
+func (o *noopObserver) OnNewCheckpoint(*entry.Info) {}
+func (o *noopObserver) OnNewTxn(*entry.Info)               {}
 func (o *noopObserver) OnNewUncommit(addrs []*VFileAddress)   {}
 
 type replayer struct {
@@ -108,7 +108,7 @@ func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
 	case entry.ETCheckpoint:
 		// fmt.Printf("ETCheckpoint\n")
 		infobuf := e.GetInfoBuf()
-		info := &entry.CheckpointInfo{}
+		info := &entry.Info{}
 		json.Unmarshal(infobuf, info)
 		replayEty := &replayEntry{
 			entryType: typ,
@@ -118,17 +118,18 @@ func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
 		copy(replayEty.payload, e.GetPayload())
 		r.checkpoints = append(r.checkpoints, replayEty)
 
-		for group, ckp := range info.CheckpointRanges {
-			interval, ok := r.checkpointrange[group]
+		for _, ckp := range info.Checkpoints {
+			interval, ok := r.checkpointrange[ckp.Group]
 			if !ok {
+				//TODO: all the ranges
 				interval = &common.ClosedInterval{
-					Start: ckp.Start,
-					End:   ckp.End,
+					Start: ckp.Ranges[0].Start,
+					End:   ckp.Ranges[0].End,
 				}
 			} else {
-				interval.TryMerge(*ckp)
+				interval.TryMerge(ckp.Ranges[0])
 			}
-			r.checkpointrange[group] = interval
+			r.checkpointrange[ckp.Group] = interval
 		}
 		vf.OnNewCheckpoint(info)
 	case entry.ETUncommitted:
@@ -141,7 +142,7 @@ func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
 			if !ok {
 				tidMap = make(map[uint64][]*replayEntry)
 			}
-			entries, ok := tidMap[addr.Tid]
+			entries, ok := tidMap[addr.LSN]
 			if !ok {
 				entries = make([]*replayEntry, 0)
 			}
@@ -151,19 +152,19 @@ func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
 			}
 			copy(replayEty.payload, e.GetPayload())
 			entries = append(entries, replayEty)
-			tidMap[addr.Tid] = entries
+			tidMap[addr.LSN] = entries
 			r.uncommit[addr.Group] = tidMap
 		}
 	case entry.ETTxn:
 		// fmt.Printf("ETTxn\n")
 		infobuf := e.GetInfoBuf()
-		info := &entry.TxnInfo{}
+		info := &entry.Info{}
 		json.Unmarshal(infobuf, info)
 		replayEty := &replayEntry{
 			entryType: e.GetType(),
 			group:     info.Group,
 			commitId:  info.CommitId,
-			tid:       info.Tid,
+			tid:       info.TxnId,
 			payload:   make([]byte, e.GetPayloadSize()),
 		}
 		copy(replayEty.payload, e.GetPayload())
@@ -172,7 +173,7 @@ func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
 	default:
 		// fmt.Printf("default\n")
 		infobuf := e.GetInfoBuf()
-		info := &entry.CommitInfo{}
+		info := &entry.Info{}
 		json.Unmarshal(infobuf, info)
 		replayEty := &replayEntry{
 			entryType: e.GetType(),

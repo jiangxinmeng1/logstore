@@ -20,6 +20,8 @@ type vInfo struct {
 	UncommitTxn map[uint32][]uint64
 	// TxnCommit   map[uint32]*roaring64.Bitmap
 	TidCidMap map[uint32]map[uint64]uint64
+
+	Addrs map[uint32]map[uint64]int //group-groupLSN-offset
 }
 
 type VFileUncommitInfo struct {
@@ -28,10 +30,10 @@ type VFileUncommitInfo struct {
 }
 
 type VFileAddress struct {
-	Group    uint32
-	Tid      uint64
-	FileName string
-	Offset   int
+	Group   uint32
+	LSN     uint64
+	Version int
+	Offset  int
 }
 
 //result contains addr, addr size
@@ -193,25 +195,23 @@ func (info *vInfo) Log(v interface{}) error {
 	if v == nil {
 		return nil
 	}
-	switch vi := v.(type) {
-	case *entry.CommitInfo:
-		return info.LogCommit(vi)
-	case *entry.CheckpointInfo:
+	vi := v.(*entry.Info)
+	switch vi.Group {
+	case entry.GTCKp:
 		return info.LogCheckpoint(vi)
-	case *entry.UncommitInfo:
+	case entry.GTUncommit:
 		return info.LogUncommitInfo(vi)
-	case *entry.TxnInfo:
-		return info.LogTxnInfo(vi)
+	default:
+		return info.LogCommit(vi)
 	}
-	panic("not supported")
 }
 
-func (info *vInfo) LogTxnInfo(txnInfo *entry.TxnInfo) error {
+func (info *vInfo) LogTxnInfo(txnInfo *entry.Info) error {
 	tidMap, ok := info.TidCidMap[txnInfo.Group]
 	if !ok {
 		tidMap = make(map[uint64]uint64)
 	}
-	tidMap[txnInfo.Tid] = txnInfo.CommitId
+	tidMap[txnInfo.TxnId] = txnInfo.CommitId
 	info.TidCidMap[txnInfo.Group] = tidMap
 
 	_, ok = info.Commits[txnInfo.Group]
@@ -221,27 +221,29 @@ func (info *vInfo) LogTxnInfo(txnInfo *entry.TxnInfo) error {
 	return info.Commits[txnInfo.Group].Append(txnInfo.CommitId)
 }
 
-func (info *vInfo) LogUncommitInfo(uncommitInfo *entry.UncommitInfo) error {
-	for group, tids := range uncommitInfo.Tids {
-		for _, tid := range tids {
-			tids, ok := info.UncommitTxn[group]
-			if !ok {
-				tids = make([]uint64, 0)
-				info.UncommitTxn[group] = tids
+func (info *vInfo) LogUncommitInfo(uncommitInfo *entry.Info) error {
+	for _, uncommit := range uncommitInfo.Uncommits {
+		tids, ok := info.UncommitTxn[uncommit.Group]
+		if !ok {
+			tids = make([]uint64, 0)
+			info.UncommitTxn[uncommit.Group] = tids
+		}
+		existed := false
+		for _, infoTid := range tids {
+			if infoTid == uncommit.Tid {
+				existed = true
+				return nil
 			}
-			for _, infoTid := range tids {
-				if infoTid == tid {
-					return nil
-				}
-			}
-			tids = append(tids, tid)
-			info.UncommitTxn[group] = tids
+		}
+		if !existed {
+			tids = append(tids, uncommit.Tid)
+			info.UncommitTxn[uncommit.Group] = tids
 		}
 	}
 	return nil
 }
 
-func (info *vInfo) LogCommit(commitInfo *entry.CommitInfo) error {
+func (info *vInfo) LogCommit(commitInfo *entry.Info) error {
 	_, ok := info.Commits[commitInfo.Group]
 	if !ok {
 		info.Commits[commitInfo.Group] = &common.ClosedInterval{}
@@ -249,31 +251,31 @@ func (info *vInfo) LogCommit(commitInfo *entry.CommitInfo) error {
 	return info.Commits[commitInfo.Group].Append(commitInfo.CommitId)
 }
 
-func (info *vInfo) LogCheckpoint(checkpointInfo *entry.CheckpointInfo) error {
-	for group, interval := range checkpointInfo.CheckpointRanges {
-		ckps, ok := info.Checkpoints[group]
+func (info *vInfo) LogCheckpoint(checkpointInfo *entry.Info) error {
+	for _, interval := range checkpointInfo.Checkpoints {
+		ckps, ok := info.Checkpoints[interval.Group]
 		if !ok {
 			ckps = make([]*common.ClosedInterval, 0)
 			ckps = append(ckps, &common.ClosedInterval{
-				Start: interval.Start,
-				End: interval.End,
+				Start: interval.Ranges[0].Start,//TODO Fuzzy ckp
+				End:   interval.Ranges[0].End,
 			})
-			info.Checkpoints[group] = ckps
+			info.Checkpoints[interval.Group] = ckps
 			return nil
 		}
 		if len(ckps) == 0 {
 			ckps = append(ckps, &common.ClosedInterval{
-				Start: interval.Start,
-				End: interval.End,
+				Start: interval.Ranges[0].Start,
+				End:   interval.Ranges[0].End,
 			})
-			info.Checkpoints[group] = ckps
+			info.Checkpoints[interval.Group] = ckps
 			return nil
 		}
-		ok = ckps[len(ckps)-1].TryMerge(*interval)
+		ok = ckps[len(ckps)-1].TryMerge(interval.Ranges[0])
 		if !ok {
-			ckps = append(ckps, interval)
+			ckps = append(ckps, &interval.Ranges[0])
 		}
-		info.Checkpoints[group] = ckps
+		info.Checkpoints[interval.Group] = ckps
 
 	}
 	return nil

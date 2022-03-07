@@ -88,21 +88,22 @@ func (bs *baseStore) flushLoop() {
 
 //set infosize, mashal info
 func (bs *baseStore) PrepareEntry(e entry.Entry) (entry.Entry, error) {
-	v := e.GetInfo()
-	switch info := v.(type) {
-	case *entry.UncommitInfo:
+	v1 := e.GetInfo()
+	if v1 == nil {
+		return e, nil
+	}
+	v := v1.(*entry.Info)
+	switch v.Group {
+	case entry.GTUncommit:
 		addrs := make([]*VFileAddress, 0)
-		for group, tids := range info.Tids {
-			for _, tid := range tids {
-				addr := bs.GetLastAddr(group, tid)
-				if addr == nil {
-					addr = &VFileAddress{}
-				}
-				addr.Group = group
-				addr.Tid = tid
-				addrs = append(addrs, addr)
-
+		for _, tids := range v.Uncommits {
+			addr := bs.GetLastAddr(tids.Group, tids.Tid)
+			if addr == nil {
+				addr = &VFileAddress{}
 			}
+			addr.Group = tids.Group
+			addr.LSN = v.GroupLSN
+			addrs = append(addrs, addr)
 		}
 		buf, err := json.Marshal(addrs)
 		if err != nil {
@@ -111,26 +112,14 @@ func (bs *baseStore) PrepareEntry(e entry.Entry) (entry.Entry, error) {
 		e.SetInfoSize(len(buf))
 		e.SetInfoBuf(buf)
 		return e, nil
-	case *entry.TxnInfo:
-		addr := bs.GetLastAddr(info.Group, info.Tid)
-		info.Addr = addr
-		buf, err := json.Marshal(info)
-		if err != nil {
-			return nil, err
-		}
-		e.SetInfoSize(len(buf))
-		e.SetInfoBuf(buf)
-		return e, nil
-	case *entry.CheckpointInfo, *entry.CommitInfo:
-		buf, err := json.Marshal(info)
+	default:
+		buf, err := json.Marshal(v)
 		if err != nil {
 			return nil, err
 		}
 		size := len(buf)
 		e.SetInfoSize(size)
 		e.SetInfoBuf(buf)
-		return e, nil
-	default:
 		return e, nil
 	}
 }

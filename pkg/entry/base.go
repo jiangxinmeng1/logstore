@@ -2,9 +2,10 @@ package entry
 
 import (
 	"fmt"
-	"github.com/jiangxinmeng1/logstore/pkg/common"
 	"io"
 	"sync"
+
+	"github.com/jiangxinmeng1/logstore/pkg/common"
 )
 
 var (
@@ -25,48 +26,92 @@ type Base struct {
 	err     error
 }
 
-type CheckpointInfo struct {
-	CheckpointRanges map[uint32]*common.ClosedInterval
-	// Group      string
-	// Checkpoint *common.ClosedInterval
+// type CheckpointInfo struct {
+// 	CheckpointRanges map[uint32]*common.ClosedInterval
+// 	Addr interface{}
+// 	// Group      string
+// 	// Checkpoint *common.ClosedInterval
+// }
+
+// func (info *CheckpointInfo) ToString() string {
+// 	s := "checkpoint entry "
+// 	for group, checkpoint := range info.CheckpointRanges {
+// 		s = fmt.Sprintf("%s <%d>-%s", s, group, checkpoint)
+// 	}
+// 	return fmt.Sprintf("%s\n", s)
+// }
+
+type Info struct {
+	Group       uint32
+	CommitId    uint64 //0 for RollBack
+	TxnId       uint64 //0 for entrys not in txn
+	Checkpoints []CkpRanges
+	Uncommits   []Tid
+
+	GroupLSN uint64
+
+	Info interface{}
 }
 
-func (info *CheckpointInfo) ToString() string {
-	s := "checkpoint entry "
-	for group, checkpoint := range info.CheckpointRanges {
-		s = fmt.Sprintf("%s <%d>-%s", s, group, checkpoint)
+func (info *Info) ToString() string {
+	switch info.Group {
+	case GTCKp:
+		s := "checkpoint entry"
+		for _, ranges := range info.Checkpoints {
+			s = fmt.Sprintf("%s G%d-%v", s, ranges.Group, ranges.Ranges)
+		}
+		return s
+	case GTUncommit:
+		s := "uncommit entry"
+		for _, tid := range info.Uncommits {
+			s = fmt.Sprintf("%s G%d-%d", s, tid.Group, tid.Tid)
+		}
+	default:
+		s := fmt.Sprintf("customized entry G%d<%d>{T%d,C%d}", info.Group, info.GroupLSN, info.TxnId, info.CommitId)
+		return s
 	}
-	return fmt.Sprintf("%s\n", s)
+	return ""
 }
 
-type CommitInfo struct {
-	Group    uint32
-	CommitId uint64
+type Tid struct {
+	Group uint32
+	Tid   uint64
 }
 
-func (info *CommitInfo) ToString() string {
-	return fmt.Sprintf("commit entry <%d>-%d\n", info.Group, info.CommitId)
+type CkpRanges struct {
+	Group  uint32
+	Ranges []common.ClosedInterval
 }
 
-type UncommitInfo struct {
-	Tids map[uint32][]uint64
-	Addr interface{}
-}
+// type CommitInfo struct {
+// 	Group    uint32
+// 	CommitId uint64
+// 	Addr interface{}
+// }
 
-func (info *UncommitInfo) ToString() string {
-	return fmt.Sprintf("uncommit entry %v\n", info.Tids)
-}
+// func (info *CommitInfo) ToString() string {
+// 	return fmt.Sprintf("commit entry <%d>-%d\n", info.Group, info.CommitId)
+// }
 
-type TxnInfo struct {
-	Group    uint32
-	Tid      uint64
-	CommitId uint64
-	Addr     interface{}
-}
+// type UncommitInfo struct {
+// 	Tids map[uint32][]uint64
+// 	Addr interface{}
+// }
 
-func (info *TxnInfo) ToString() string {
-	return fmt.Sprintf("txn entry <%d> %d-%d\n", info.Group, info.Tid, info.CommitId)
-}
+// func (info *UncommitInfo) ToString() string {
+// 	return fmt.Sprintf("uncommit entry %v\n", info.Tids)
+// }
+
+// type TxnInfo struct {
+// 	Group    uint32
+// 	Tid      uint64
+// 	CommitId uint64
+// 	Addr     interface{}
+// }
+
+// func (info *TxnInfo) ToString() string {
+// 	return fmt.Sprintf("txn entry <%d> %d-%d\n", info.Group, info.Tid, info.CommitId)
+// }
 
 func GetBase() *Base {
 	b := _basePool.Get().(*Base)

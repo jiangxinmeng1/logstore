@@ -49,9 +49,9 @@ type FileReader interface {
 
 type ReplayObserver interface {
 	OnNewEntry(int)
-	OnNewCommit(*entry.CommitInfo)
-	OnNewCheckpoint(*entry.CheckpointInfo)
-	OnNewTxn(*entry.TxnInfo)
+	OnNewCommit(*entry.Info)
+	OnNewCheckpoint(*entry.Info)
+	OnNewTxn(*entry.Info)
 	OnNewUncommit(addrs []*VFileAddress)
 }
 
