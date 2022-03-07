@@ -8,6 +8,8 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"time"
+
 	// "time"
 
 	"github.com/jiangxinmeng1/logstore/pkg/common"
@@ -492,16 +494,17 @@ func TestLoad(t *testing.T) {
 					var loadedEntry entry.Entry
 					for i := 0; i < 5; i++ {
 						loadedEntry, err = s.Load(info.Group, info.GroupLSN)
-						fmt.Printf("loaded entry is %s", loadedEntry.GetPayload())
 						if err == nil {
+							fmt.Printf("loaded entry is %s", loadedEntry.GetPayload())
 							break
 						}
-						// time.Sleep(time.Millisecond * 500)
+						fmt.Printf("%d-%d:%v\n",info.Group,info.GroupLSN,err)
+						time.Sleep(time.Millisecond * 500)
 					}
 					assert.Nil(t, err)
-					// t.Logf("synced %d", s.GetSynced("group1"))
-					// t.Logf("checkpointed %d", s.GetCheckpointed("group1"))
-					// t.Logf("penddings %d", s.GetPenddings("group1"))
+					t.Logf("synced %d", s.GetSynced(info.Group))
+					t.Logf("checkpointed %d", s.GetCheckpointed(info.Group))
+					t.Logf("penddings %d", s.GetPenddings(info.Group))
 				}
 				fwg.Done()
 			}
@@ -526,7 +529,7 @@ func TestLoad(t *testing.T) {
 				case 1, 2, 3, 4, 5: //uncommit entry
 					e.SetType(entry.ETUncommitted)
 					uncommitInfo := &entry.Info{
-						Group: entry.GTUncommit,
+						Group:    entry.GTUncommit,
 						GroupLSN: uncommitLSN.Alloc(),
 						Uncommits: []entry.Tid{{
 							Group: groupNo,
@@ -544,7 +547,7 @@ func TestLoad(t *testing.T) {
 					e.SetType(entry.ETCheckpoint)
 					end := cidAlloc.Get()
 					checkpointInfo := &entry.Info{
-						Group: entry.GTCKp,
+						Group:    entry.GTCKp,
 						GroupLSN: ckpLSN.Alloc(),
 						Checkpoints: []entry.CkpRanges{{
 							Group: 1,
@@ -596,7 +599,11 @@ func TestLoad(t *testing.T) {
 					copy(n.GetBuf(), buf)
 					e.UnmarshalFromNode(n, true)
 				}
-				s.AppendEntry(e)
+				err:=s.AppendEntry(e)
+				if err != nil{
+					fmt.Printf("err is %v\n",err)
+				}
+				assert.Nil(t,err)
 				ch <- e
 			}
 		}

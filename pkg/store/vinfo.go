@@ -306,11 +306,11 @@ func (info *vInfo) GetOffsetByLSN(groupId uint32, lsn uint64) (int, error) {
 	lsnMap, ok := info.Addrs[groupId]
 	if !ok {
 		// fmt.Printf("%p|addrs are %v\n", info, info.Addrs)
-		return 0, errors.New("group not existed")
+		return 0, errors.New("vinfo group not existed")
 	}
 	offset, ok := lsnMap[lsn]
 	if !ok {
-		return 0, errors.New("lsn not existed")
+		return 0, errors.New("vinfo lsn not existed")
 	}
 	return offset, nil
 }

@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/jiangxinmeng1/logstore/pkg/common"
@@ -52,6 +53,7 @@ func (base *syncBase) GetVersionByGLSN(groupId uint32, lsn uint64) (int, error) 
 			return ver, nil
 		}
 	}
+	fmt.Printf("versionsMap is %v\n", versionsMap)
 	return 0, errors.New("lsn not existed")
 }
 
@@ -91,6 +93,7 @@ func (base *syncBase) OnEntryReceived(e entry.Entry) error {
 				}
 				base.uncommits[tid.Group] = tids
 			}
+			// fmt.Printf("receive uncommit %d-%d\n", v.Group, v.GroupLSN)
 		default:
 			base.syncing[v.Group] = v.CommitId
 		}
@@ -105,9 +108,10 @@ func (base *syncBase) OnEntryReceived(e entry.Entry) error {
 		if !ok {
 			interval = common.ClosedInterval{}
 		}
-		interval.TryMerge(common.ClosedInterval{Start: addr.LSN, End: addr.LSN})
+		interval.TryMerge(common.ClosedInterval{Start: 0, End: addr.LSN})
 		versionRanges[addr.Version] = interval
 		base.addrs[addr.Group] = versionRanges
+		// fmt.Printf("versionsMap is %v\n", base.addrs)
 	}
 	return nil
 }
