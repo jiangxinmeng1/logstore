@@ -104,7 +104,7 @@ func (bs *baseStore) PrepareEntry(e entry.Entry) (entry.Entry, error) {
 				addr = &VFileAddress{}
 			}
 			addr.Group = tids.Group
-			addr.LSN = v.GroupLSN
+			addr.LSN = tids.Tid
 			addrs = append(addrs, addr)
 		}
 		buf, err := json.Marshal(addrs)

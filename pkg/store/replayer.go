@@ -57,7 +57,6 @@ func (r *replayer) mergeUncommittedEntries(pre, curr *replayEntry) *replayEntry 
 }
 
 func (r *replayer) Apply() {
-	fmt.Printf("%v\n",r.uncommit)
 	for _, e := range r.checkpoints {
 		r.applyEntry(e.group, e.commitId, e.payload, e.entryType, e.info)
 	}
@@ -77,7 +76,6 @@ func (r *replayer) Apply() {
 				entries, ok := tidMap[e.tid]
 				if ok {
 					for _, entry := range entries {
-						fmt.Printf("%s",entry)
 						r.applyEntry(entry.group, entry.commitId, entry.payload, entry.entryType, nil)
 						// pre = r.mergeUncommittedEntries(
 						// 	pre, entry)
