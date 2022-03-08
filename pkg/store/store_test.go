@@ -225,9 +225,14 @@ func TestUncommitEntry(t *testing.T) {
 			case e := <-ch:
 				err := e.WaitDone()
 				assert.Nil(t, err)
-				t.Logf("synced %d", s.GetSynced(1))
-				t.Logf("checkpointed %d", s.GetCheckpointed(1))
-				t.Logf("penddings %d", s.GetPenddings(1))
+				v := e.GetInfo()
+				if v != nil {
+					info:=v.(*entry.Info)
+					t.Logf("group-%d",info.Group)
+					t.Logf("synced %d", s.GetSynced(info.Group))
+					t.Logf("checkpointed %d", s.GetCheckpointed(info.Group))
+					t.Logf("penddings %d", s.GetPenddings(info.Group))
+				}
 				fwg.Done()
 			}
 		}
@@ -503,7 +508,7 @@ func TestLoad(t *testing.T) {
 							fmt.Printf("loaded entry is %s", loadedEntry.GetPayload())
 							break
 						}
-						fmt.Printf("%d-%d:%v\n",info.Group,info.GroupLSN,err)
+						fmt.Printf("%d-%d:%v\n", info.Group, info.GroupLSN, err)
 						time.Sleep(time.Millisecond * 500)
 					}
 					assert.Nil(t, err)
@@ -605,11 +610,11 @@ func TestLoad(t *testing.T) {
 					copy(n.GetBuf(), buf)
 					e.UnmarshalFromNode(n, true)
 				}
-				err:=s.AppendEntry(e)
-				if err != nil{
-					fmt.Printf("err is %v\n",err)
+				err := s.AppendEntry(e)
+				if err != nil {
+					fmt.Printf("err is %v\n", err)
 				}
-				assert.Nil(t,err)
+				assert.Nil(t, err)
 				ch <- e
 			}
 		}

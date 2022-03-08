@@ -242,6 +242,14 @@ func (rf *rotateFile) makeSpace(size int) (rotated *vFile, curr *vFileState, err
 		}
 	}
 	curr = rf.getFileState()
+	if size > curr.bufSize {
+		return nil, nil, fmt.Errorf("buff size is %v, but entry size is %v", rf.getFileState().file.bufSize, size) //TODO write without buf
+	}
+	if size+curr.bufPos > curr.bufSize {
+		curr.file.Sync()
+		fmt.Printf("rf.250\n")
+		curr.bufPos = 0
+	}
 	curr.file.PrepareWrite(size)
 	return rotated, curr, nil
 }

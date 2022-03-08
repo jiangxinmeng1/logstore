@@ -9,6 +9,7 @@ type fileAppender struct {
 	activeId      uint64
 	capacity      int
 	size          int
+	tempPos       int
 	rollbackState *vFileState
 	syncWaited    *vFile
 	info          interface{}
@@ -29,6 +30,7 @@ func (appender *fileAppender) Prepare(size int, info interface{}) error {
 	if appender.syncWaited, appender.rollbackState, err = appender.rfile.makeSpace(size); err != nil {
 		return err
 	}
+	appender.tempPos = appender.rollbackState.bufPos
 	if info == nil {
 		return nil
 	}
@@ -59,13 +61,16 @@ func (appender *fileAppender) Write(data []byte) (int, error) {
 	if appender.size > appender.capacity {
 		panic("write logic error")
 	}
-	n, err := appender.rollbackState.file.WriteAt(data,
-		int64(appender.size-len(data)+appender.rollbackState.pos))
-	return n, err
+	n := copy(appender.rollbackState.file.buf[appender.tempPos:], data)
+	appender.tempPos += n
+	// n, err := appender.rollbackState.file.WriteAt(data,
+	// 	int64(appender.size-len(data)+appender.rollbackState.pos))
+	return n, nil
 }
 
 func (appender *fileAppender) Commit() error {
 	err := appender.rollbackState.file.Log(appender.info)
+	appender.rollbackState.file.bufpos = appender.tempPos
 	if err != nil {
 		return err
 	}
@@ -93,7 +98,8 @@ func (appender *fileAppender) Sync() error {
 }
 
 func (appender *fileAppender) Revert() {
-	if err := appender.rollbackState.file.Truncate(int64(appender.rollbackState.pos)); err != nil {
-		panic(err)
-	}
+
+	// if err := appender.rollbackState.file.Truncate(int64(appender.rollbackState.pos)); err != nil {
+	// 	panic(err)
+	// }
 }

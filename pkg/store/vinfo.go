@@ -18,11 +18,11 @@ import (
 type vInfo struct {
 	Commits     map[uint32]*common.ClosedInterval
 	Checkpoints map[uint32]*common.ClosedIntervals
-	UncommitTxn map[uint32][]uint64
+	UncommitTxn map[uint32][]uint64 // 2% uncommit txn
 	// TxnCommit   map[uint32]*roaring64.Bitmap
-	TidCidMap map[uint32]map[uint64]uint64
+	TidCidMap map[uint32]map[uint64]uint64 // 5% uncommit txn
 
-	Addrs  map[uint32]map[uint64]int //group-groupLSN-offset
+	Addrs  map[uint32]map[uint64]int //group-groupLSN-offset 5%
 	addrmu sync.RWMutex
 }
 

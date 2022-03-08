@@ -17,10 +17,13 @@ import (
 )
 
 var Metasize = 2
+var DefaultBufSize = common.M
 
 type vFileState struct {
-	pos  int
-	file *vFile
+	bufPos  int
+	bufSize int
+	pos     int
+	file    *vFile
 }
 
 type vFile struct {
@@ -33,6 +36,10 @@ type vFile struct {
 	wg         sync.WaitGroup
 	commitCond sync.Cond
 	history    History
+	buf        []byte
+	syncpos    int
+	bufpos     int
+	bufSize    int
 }
 
 func newVFile(mu *sync.RWMutex, name string, version int, history History) (*vFile, error) {
@@ -51,6 +58,8 @@ func newVFile(mu *sync.RWMutex, name string, version int, history History) (*vFi
 		version:    version,
 		commitCond: *sync.NewCond(new(sync.Mutex)),
 		history:    history,
+		buf:        make([]byte, DefaultBufSize),
+		bufSize:    int(DefaultBufSize),
 	}, nil
 }
 
@@ -131,8 +140,10 @@ func (vf *vFile) GetState() *vFileState {
 	vf.RLock()
 	defer vf.RUnlock()
 	return &vFileState{
-		pos:  vf.size,
-		file: vf,
+		bufPos:  vf.bufpos,
+		bufSize: vf.bufSize,
+		pos:     vf.size,
+		file:    vf,
 	}
 }
 
@@ -161,6 +172,20 @@ func (vf *vFile) Commit() {
 	atomic.StoreInt32(&vf.committed, int32(1))
 	vf.commitCond.Broadcast()
 	vf.commitCond.L.Unlock()
+}
+
+func (vf *vFile) Sync() error {
+	_, err := vf.WriteAt(vf.buf[:vf.bufpos], int64(vf.syncpos))
+	if err != nil {
+		return err
+	}
+	vf.syncpos += vf.bufpos
+	if vf.syncpos!=vf.size{
+		panic(fmt.Sprintf("logic error, sync %v, size %v",vf.syncpos,vf.size))
+	}
+	vf.bufpos = 0
+	vf.File.Sync()
+	return nil
 }
 
 func (vf *vFile) WriteMeta() {

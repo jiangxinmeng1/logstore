@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/jiangxinmeng1/logstore/pkg/common"
@@ -127,6 +128,7 @@ func (bs *baseStore) PrepareEntry(e entry.Entry) (entry.Entry, error) {
 
 func (bs *baseStore) onEntries(entries []entry.Entry) {
 	var err error
+	fmt.Printf("%d entries per batch\n",len(entries))
 	for _, e := range entries {
 		appender := bs.file.GetAppender()
 		e, err := bs.PrepareEntry(e)
@@ -152,6 +154,13 @@ func (bs *baseStore) onEntries(entries []entry.Entry) {
 	for _, e := range entries {
 		e.DoneWithErr(nil)
 	}
+}
+
+func (bs *baseStore) OnCommit(){
+	//buffer
+	//offset
+	//file
+	bs.syncBase.OnCommit()
 }
 
 func (bs *baseStore) Close() error {

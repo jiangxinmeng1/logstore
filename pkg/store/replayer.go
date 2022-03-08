@@ -57,6 +57,7 @@ func (r *replayer) mergeUncommittedEntries(pre, curr *replayEntry) *replayEntry 
 }
 
 func (r *replayer) Apply() {
+	fmt.Printf("%v\n",r.uncommit)
 	for _, e := range r.checkpoints {
 		r.applyEntry(e.group, e.commitId, e.payload, e.entryType, e.info)
 	}
@@ -70,18 +71,20 @@ func (r *replayer) Apply() {
 			}
 		}
 		if e.entryType == entry.ETTxn {
-			var pre *replayEntry
+			// var pre *replayEntry
 			tidMap, ok := r.uncommit[e.group]
 			if ok {
 				entries, ok := tidMap[e.tid]
 				if ok {
 					for _, entry := range entries {
-						pre = r.mergeUncommittedEntries(
-							pre, entry)
+						fmt.Printf("%s",entry)
+						r.applyEntry(entry.group, entry.commitId, entry.payload, entry.entryType, nil)
+						// pre = r.mergeUncommittedEntries(
+						// 	pre, entry)
 					}
 				}
 			}
-			e = r.mergeUncommittedEntries(pre, e)
+			// e = r.mergeUncommittedEntries(pre, e)
 			r.applyEntry(e.group, e.commitId, e.payload, e.entryType, nil)
 		} else {
 			r.applyEntry(e.group, e.commitId, e.payload, e.entryType, nil)
@@ -99,7 +102,9 @@ type replayEntry struct {
 	payload []byte
 	info    interface{}
 }
-
+func (r *replayEntry)String()string{
+	return fmt.Sprintf("%v\n",r.info)
+}
 func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
 	typ := e.GetType()
 	switch typ {
