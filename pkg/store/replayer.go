@@ -25,7 +25,7 @@ type replayer struct {
 	state           vFileState
 	uncommit        map[uint32]map[uint64][]*replayEntry
 	entrys          []*replayEntry
-	checkpointrange map[uint32]*common.ClosedInterval
+	checkpointrange map[uint32]*common.ClosedIntervals
 	checkpoints     []*replayEntry
 	mergeFuncs      map[uint32]func(pre, curr []byte) []byte
 	applyEntry      ApplyHandle
@@ -35,7 +35,7 @@ func newReplayer(h ApplyHandle) *replayer {
 	return &replayer{
 		uncommit:        make(map[uint32]map[uint64][]*replayEntry),
 		entrys:          make([]*replayEntry, 0),
-		checkpointrange: make(map[uint32]*common.ClosedInterval),
+		checkpointrange: make(map[uint32]*common.ClosedIntervals),
 		checkpoints:     make([]*replayEntry, 0),
 		mergeFuncs:      make(map[uint32]func(pre []byte, curr []byte) []byte),
 		applyEntry:      h,
@@ -64,7 +64,7 @@ func (r *replayer) Apply() {
 	for _, e := range r.entrys {
 		interval, ok := r.checkpointrange[e.group]
 		if ok {
-			if interval.Contains(
+			if interval.ContainsInterval(
 				common.ClosedInterval{Start: e.commitId, End: e.commitId}) {
 				continue
 			}
@@ -128,12 +128,9 @@ func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
 			interval, ok := r.checkpointrange[ckp.Group]
 			if !ok {
 				//TODO: all the ranges
-				interval = &common.ClosedInterval{
-					Start: ckp.Ranges[0].Start,
-					End:   ckp.Ranges[0].End,
-				}
+				interval = common.NewClosedIntervalsByIntervals(ckp.Ranges)
 			} else {
-				interval.TryMerge(ckp.Ranges[0])
+				interval.TryMerge(*ckp.Ranges)
 			}
 			r.checkpointrange[ckp.Group] = interval
 		}

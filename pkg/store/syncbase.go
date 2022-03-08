@@ -72,7 +72,7 @@ func (base *syncBase) OnEntryReceived(e entry.Entry) error {
 		switch v.Group {
 		case entry.GTCKp:
 			for _, intervals := range v.Checkpoints {
-				base.checkpointing[intervals.Group] = intervals.Ranges[0].End
+				base.checkpointing[intervals.Group] = intervals.Ranges.Intervals[0].End//TODO calculate the first range
 			}
 		case entry.GTUncommit:
 			// addr := v.Addr.(*VFileAddress)

@@ -99,9 +99,11 @@ func TestAppender(t *testing.T) {
 				Group: entry.GTCKp,
 				Checkpoints: []entry.CkpRanges{{
 					Group: 1,
-					Ranges: []common.ClosedInterval{{
-						End: common.GetGlobalSeqNum(),
-					}},
+					Ranges: common.NewClosedIntervalsByInterval(
+						&common.ClosedInterval{
+							Start: 0,
+							End:   common.GetGlobalSeqNum(),
+						}),
 				}},
 			}
 			err = appender.Prepare(len(toWrite), checkpointInfo)
@@ -160,9 +162,11 @@ func TestVInfo(t *testing.T) {
 		Group: entry.GTCKp,
 		Checkpoints: []entry.CkpRanges{{
 			Group: 1,
-			Ranges: []common.ClosedInterval{{
-				End: uint64(end / 2),
-			}},
+			Ranges: common.NewClosedIntervalsByInterval(
+				&common.ClosedInterval{
+					Start: 0,
+					End:   uint64(end / 2),
+				}),
 		}},
 	}
 	err = vinfo.LogCheckpoint(checkpointInfo)
@@ -198,9 +202,11 @@ func TestReadVInfo(t *testing.T) {
 				Group: entry.GTCKp,
 				Checkpoints: []entry.CkpRanges{{
 					Group: 1,
-					Ranges: []common.ClosedInterval{{
-						End: common.GetGlobalSeqNum(),
-					}},
+					Ranges: common.NewClosedIntervalsByInterval(
+						&common.ClosedInterval{
+							Start: 0,
+							End:   common.GetGlobalSeqNum(),
+						}),
 				}},
 			}
 			appender.Prepare(len(toWrite), checkpointInfo)

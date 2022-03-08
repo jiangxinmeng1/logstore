@@ -64,9 +64,11 @@ func TestStore(t *testing.T) {
 				Group: entry.GTCKp,
 				Checkpoints: []entry.CkpRanges{{
 					Group: 1,
-					Ranges: []common.ClosedInterval{{
-						End: common.GetGlobalSeqNum(),
-					}},
+					Ranges: common.NewClosedIntervalsByInterval(
+						&common.ClosedInterval{
+							Start: 0,
+							End:   common.GetGlobalSeqNum(),
+						}),
 				}},
 			}
 			e.SetInfo(checkpointInfo)
@@ -154,10 +156,11 @@ func TestMultiGroup(t *testing.T) {
 						Group: entry.GTCKp,
 						Checkpoints: []entry.CkpRanges{{
 							Group: 1,
-							Ranges: []common.ClosedInterval{{
-								Start: ckp,
-								End:   end,
-							}},
+							Ranges: common.NewClosedIntervalsByInterval(
+								&common.ClosedInterval{
+									Start: ckp,
+									End:   end,
+								}),
 						}},
 					}
 					ckp = end
@@ -264,10 +267,11 @@ func TestUncommitEntry(t *testing.T) {
 						Group: entry.GTCKp,
 						Checkpoints: []entry.CkpRanges{{
 							Group: 1,
-							Ranges: []common.ClosedInterval{{
-								Start: ckp,
-								End:   end,
-							}},
+							Ranges: common.NewClosedIntervalsByInterval(
+								&common.ClosedInterval{
+									Start: ckp,
+									End:   end,
+								}),
 						}},
 					}
 					ckp = end
@@ -381,10 +385,11 @@ func TestReplay(t *testing.T) {
 						Group: entry.GTCKp,
 						Checkpoints: []entry.CkpRanges{{
 							Group: 1,
-							Ranges: []common.ClosedInterval{{
-								Start: ckp,
-								End:   end,
-							}},
+							Ranges: common.NewClosedIntervalsByInterval(
+								&common.ClosedInterval{
+									Start: ckp,
+									End:   end,
+								}),
 						}},
 					}
 					ckp = end
@@ -551,10 +556,11 @@ func TestLoad(t *testing.T) {
 						GroupLSN: ckpLSN.Alloc(),
 						Checkpoints: []entry.CkpRanges{{
 							Group: 1,
-							Ranges: []common.ClosedInterval{{
-								Start: ckp,
-								End:   end,
-							}},
+							Ranges: common.NewClosedIntervalsByInterval(
+								&common.ClosedInterval{
+									Start: ckp,
+									End:   end,
+								}),
 						}},
 					}
 					ckp = end

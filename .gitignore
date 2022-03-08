@@ -13,3 +13,7 @@ vendor/
 main
 mo-server
 *.toml
+*.log
+pkg/store/cpu.prof
+pkg/store/store.test
+example/wal/1

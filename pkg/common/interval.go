@@ -57,3 +57,11 @@ func (i *ClosedInterval) TryMerge(o ClosedInterval) bool {
 func (i *ClosedInterval) AtomicUpdateEnd(v uint64) {
 	atomic.StoreUint64(&i.End, v)
 }
+
+func (i *ClosedInterval) LT(o *ClosedInterval) bool {
+	return i.End < o.Start
+}
+
+func (i *ClosedInterval) GT(o *ClosedInterval) bool {
+	return i.Start < o.End
+}

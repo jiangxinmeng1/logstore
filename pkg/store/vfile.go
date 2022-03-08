@@ -54,27 +54,27 @@ func newVFile(mu *sync.RWMutex, name string, version int, history History) (*vFi
 	}, nil
 }
 
-func (vf *vFile) InCommits(intervals map[uint32]*common.ClosedInterval) bool {
+func (vf *vFile) InCommits(intervals map[uint32]*common.ClosedIntervals) bool {
 	for group, commits := range vf.Commits {
 		interval, ok := intervals[group]
 		if !ok {
 			return false
 		}
-		if !interval.Contains(*commits) {
+		if !interval.ContainsInterval(*commits) {
 			return false
 		}
 	}
 	return true
 }
 
-func (vf *vFile) InCheckpoint(intervals map[uint32]*common.ClosedInterval) bool {
+func (vf *vFile) InCheckpoint(intervals map[uint32]*common.ClosedIntervals) bool {
 	for group, ckps := range vf.Checkpoints {
 		interval, ok := intervals[group]
 		if !ok {
 			return false
 		}
-		for _, ckp := range ckps {
-			if !interval.Contains(*ckp) {
+		for _, ckp := range ckps.Intervals {
+			if !interval.ContainsInterval(*ckp) {
 				return false
 			}
 		}
@@ -83,27 +83,27 @@ func (vf *vFile) InCheckpoint(intervals map[uint32]*common.ClosedInterval) bool 
 }
 
 // TODO: process multi checkpoints.
-func (vf *vFile) MergeCheckpoint(interval *map[uint32]*common.ClosedInterval) {
+func (vf *vFile) MergeCheckpoint(interval map[uint32]*common.ClosedIntervals) {
 	if len(vf.Checkpoints) == 0 {
 		return
 	}
 	if interval == nil {
-		ret := make(map[uint32]*common.ClosedInterval)
+		ret := make(map[uint32]*common.ClosedIntervals)
 		for group, ckps := range vf.Checkpoints {
-			ret[group] = ckps[0]
+			ret[group] = common.NewClosedIntervalsByIntervals(ckps)
 		}
-		interval = &ret
+		interval = ret
 		return
 	}
 	for group, ckps := range vf.Checkpoints {
-		if len(ckps) == 0 {
+		if len(ckps.Intervals) == 0 {
 			continue
 		}
-		_, ok := (*interval)[group]
+		_, ok := interval[group]
 		if !ok {
-			(*interval)[group] = &common.ClosedInterval{}
+			interval[group] = &common.ClosedIntervals{}
 		}
-		(*interval)[group].TryMerge(*ckps[0])
+		interval[group].TryMerge(*ckps)
 	}
 }
 

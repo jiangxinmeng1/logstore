@@ -125,7 +125,7 @@ type entryWrapper struct {
 
 // One worker
 func (h *history) TryTruncate() error {
-	gIntervals := make(map[uint32]*common.ClosedInterval)
+	gIntervals := make(map[uint32]*common.ClosedIntervals)
 	toDelete := make([]entryWrapper, 0, 4)
 	tidCidMap := make(map[uint32]map[uint64]uint64)
 	h.mu.RLock()
@@ -143,7 +143,7 @@ func (h *history) TryTruncate() error {
 			toDelete = append(toDelete, wrapper)
 			continue
 		}
-		e.MergeCheckpoint(&gIntervals)
+		e.MergeCheckpoint(gIntervals)
 	}
 	h.mu.Lock()
 	for _, wrapper := range toDelete {

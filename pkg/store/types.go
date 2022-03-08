@@ -25,10 +25,10 @@ type VFile interface {
 	Id() int
 	Name() string
 	String() string
-	InCheckpoint(map[uint32]*common.ClosedInterval) bool
-	InCommits(map[uint32]*common.ClosedInterval) bool
-	InTxnCommits(map[uint32]map[uint64]uint64, map[uint32]*common.ClosedInterval) bool
-	MergeCheckpoint(*map[uint32]*common.ClosedInterval)
+	InCheckpoint(map[uint32]*common.ClosedIntervals) bool
+	InCommits(map[uint32]*common.ClosedIntervals) bool
+	InTxnCommits(map[uint32]map[uint64]uint64, map[uint32]*common.ClosedIntervals) bool
+	MergeCheckpoint(map[uint32]*common.ClosedIntervals)
 	MergeTidCidMap(map[uint32]map[uint64]uint64)
 	Replay(ReplayHandle, ReplayObserver) error
 	Load(groupId uint32, lsn uint64) (entry.Entry, error)

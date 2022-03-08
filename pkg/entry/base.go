@@ -84,7 +84,7 @@ type Tid struct {
 
 type CkpRanges struct {
 	Group  uint32
-	Ranges []common.ClosedInterval
+	Ranges *common.ClosedIntervals
 }
 
 // type CommitInfo struct {

@@ -17,7 +17,7 @@ import (
 
 type vInfo struct {
 	Commits     map[uint32]*common.ClosedInterval
-	Checkpoints map[uint32][]*common.ClosedInterval
+	Checkpoints map[uint32]*common.ClosedIntervals
 	UncommitTxn map[uint32][]uint64
 	// TxnCommit   map[uint32]*roaring64.Bitmap
 	TidCidMap map[uint32]map[uint64]uint64
@@ -65,7 +65,7 @@ func UnmarshalAddrs(buf []byte) ([]byte, []*VFileAddress, error) {
 func newVInfo() *vInfo {
 	return &vInfo{
 		Commits:     make(map[uint32]*common.ClosedInterval),
-		Checkpoints: make(map[uint32][]*common.ClosedInterval),
+		Checkpoints: make(map[uint32]*common.ClosedIntervals),
 		UncommitTxn: make(map[uint32][]uint64),
 		// TxnCommit:   make(map[string]*roaring64.Bitmap),
 		TidCidMap: make(map[uint32]map[uint64]uint64),
@@ -99,7 +99,7 @@ func (info *vInfo) MergeTidCidMap(tidCidMap map[uint32]map[uint64]uint64) {
 		tidCidMap[group] = gMap
 	}
 }
-func (info *vInfo) InTxnCommits(tidCidMap map[uint32]map[uint64]uint64, intervals map[uint32]*common.ClosedInterval) bool {
+func (info *vInfo) InTxnCommits(tidCidMap map[uint32]map[uint64]uint64, intervals map[uint32]*common.ClosedIntervals) bool {
 	for group, tids := range info.UncommitTxn {
 		tidMap, ok := tidCidMap[group]
 		if !ok {
@@ -114,7 +114,7 @@ func (info *vInfo) InTxnCommits(tidCidMap map[uint32]map[uint64]uint64, interval
 			if !ok {
 				return false
 			}
-			if !interval.Contains(common.ClosedInterval{Start: cid, End: cid}) {
+			if !interval.ContainsInterval(common.ClosedInterval{Start: cid, End: cid}) {
 				return false
 			}
 		}
@@ -131,13 +131,13 @@ func (info *vInfo) GetCommits(groupId uint32) (commits common.ClosedInterval) {
 	return commits
 }
 
-func (info *vInfo) GetCheckpoints(groupId uint32) (checkpoint []common.ClosedInterval) {
-	checkpoint = make([]common.ClosedInterval, 0)
-	for _, interval := range info.Checkpoints[groupId] {
-		checkpoint = append(checkpoint, *interval)
-	}
-	return checkpoint
-}
+// func (info *vInfo) GetCheckpoints(groupId uint32) (checkpoint *common.ClosedInterval) {
+// 	checkpoint = make([]common.ClosedInterval, 0)
+// 	for _, interval := range info.Checkpoints[groupId] {
+// 		checkpoint = append(checkpoint, *interval)
+// 	}
+// 	return checkpoint
+// }
 
 func (info *vInfo) String() string {
 	s := "("
@@ -166,7 +166,7 @@ func (info *vInfo) String() string {
 
 		ckps, ok := info.Checkpoints[group]
 		if ok {
-			for _, ckp := range ckps {
+			for _, ckp := range ckps.Intervals {
 				s = fmt.Sprintf("%s%s", s, ckp.String())
 			}
 			s = fmt.Sprintf("%s\n", s)
@@ -274,28 +274,12 @@ func (info *vInfo) LogCheckpoint(checkpointInfo *entry.Info) error {
 	for _, interval := range checkpointInfo.Checkpoints {
 		ckps, ok := info.Checkpoints[interval.Group]
 		if !ok {
-			ckps = make([]*common.ClosedInterval, 0)
-			ckps = append(ckps, &common.ClosedInterval{
-				Start: interval.Ranges[0].Start, //TODO Fuzzy ckp
-				End:   interval.Ranges[0].End,
-			})
+			ckps = common.NewClosedIntervalsByIntervals(interval.Ranges)
 			info.Checkpoints[interval.Group] = ckps
-			return nil
+			continue
 		}
-		if len(ckps) == 0 {
-			ckps = append(ckps, &common.ClosedInterval{
-				Start: interval.Ranges[0].Start,
-				End:   interval.Ranges[0].End,
-			})
-			info.Checkpoints[interval.Group] = ckps
-			return nil
-		}
-		ok = ckps[len(ckps)-1].TryMerge(interval.Ranges[0])
-		if !ok {
-			ckps = append(ckps, &interval.Ranges[0])
-		}
+		ckps.TryMerge(*interval.Ranges)
 		info.Checkpoints[interval.Group] = ckps
-
 	}
 	return nil
 }

@@ -116,9 +116,9 @@ func (sm *stateMachine) checkpoint(_ ...interface{}) {
 		Group: entry.GTCKp,
 		Checkpoints: []entry.CkpRanges{{
 			Group: 1,
-			Ranges: []common.ClosedInterval{{
-				End: sm.VisibleLSN(),
-			}},
+			Ranges: common.NewClosedIntervalsByInterval(
+				&common.ClosedInterval{End: sm.VisibleLSN()},
+			),
 		}},
 	}
 	e.SetInfo(ckpInfo)
