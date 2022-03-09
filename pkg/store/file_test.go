@@ -127,7 +127,7 @@ func TestAppender(t *testing.T) {
 				assert.Nil(t, err)
 				err = app.Commit()
 				assert.Nil(t, err)
-				app.Sync()
+				// app.Sync()
 				t.Logf("[%s] takes %s", appender.rollbackState.file.Name(), time.Since(now))
 				assert.Nil(t, err)
 				truncate := func() {
@@ -223,7 +223,7 @@ func TestReadVInfo(t *testing.T) {
 				defer wg.Done()
 				app.Write(toWrite)
 				app.Commit()
-				app.Sync()
+				// app.Sync()
 				truncate := func() {
 					defer wg.Done()
 					rf.history.TryTruncate()

@@ -1,6 +1,8 @@
 package store
 
 import (
+	// "fmt"
+
 	"github.com/jiangxinmeng1/logstore/pkg/entry"
 )
 
@@ -61,11 +63,14 @@ func (appender *fileAppender) Write(data []byte) (int, error) {
 	if appender.size > appender.capacity {
 		panic("write logic error")
 	}
-	n := copy(appender.rollbackState.file.buf[appender.tempPos:], data)
+	// n := copy(appender.rollbackState.file.buf[appender.tempPos:], data)
+	// fmt.Printf("%p|write in buf[%v,%v]\n", appender, appender.tempPos, appender.tempPos+n)
+	// vf := appender.rollbackState.file
+	// fmt.Printf("%p|write vf in buf [%v,%v]\n", vf, vf.syncpos+appender.tempPos, vf.syncpos+appender.tempPos+n)
+	n, err := appender.rollbackState.file.WriteAt(data,
+		int64(appender.size-len(data)+appender.rollbackState.pos))
 	appender.tempPos += n
-	// n, err := appender.rollbackState.file.WriteAt(data,
-	// 	int64(appender.size-len(data)+appender.rollbackState.pos))
-	return n, nil
+	return n, err
 }
 
 func (appender *fileAppender) Commit() error {

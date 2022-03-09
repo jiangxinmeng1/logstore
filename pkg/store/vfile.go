@@ -155,6 +155,7 @@ func (vf *vFile) PrepareWrite(size int) {
 	// fmt.Printf("PrepareWrite %s\n", vf.Name())
 	vf.wg.Add(1)
 	vf.size += size
+	// fmt.Printf("\n%p|prepare write %d->%d\n", vf, vf.size-size, vf.size)
 }
 
 func (vf *vFile) FinishWrite() {
@@ -175,16 +176,20 @@ func (vf *vFile) Commit() {
 }
 
 func (vf *vFile) Sync() error {
-	_, err := vf.WriteAt(vf.buf[:vf.bufpos], int64(vf.syncpos))
+	_, err := vf.File.WriteAt(vf.buf[:vf.bufpos], int64(vf.syncpos))
 	if err != nil {
 		return err
 	}
+	vf.File.Sync()
+	// fmt.Printf("%p|sync [%v,%v](total%v|n=%d)\n", vf, vf.syncpos, vf.syncpos+vf.bufpos, vf.bufpos,n)
+	buf := make([]byte, 10)
+	_, err = vf.ReadAt(buf, int64(vf.syncpos))
+	// fmt.Printf("%p|read at %v, buf is %v, n=%d, err is %v\n", vf, vf.syncpos, buf, n, err)
 	vf.syncpos += vf.bufpos
-	if vf.syncpos!=vf.size{
-		panic(fmt.Sprintf("logic error, sync %v, size %v",vf.syncpos,vf.size))
+	if vf.syncpos != vf.size {
+		panic(fmt.Sprintf("%p|logic error, sync %v, size %v", vf, vf.syncpos, vf.size))
 	}
 	vf.bufpos = 0
-	vf.File.Sync()
 	return nil
 }
 
@@ -210,7 +215,11 @@ func (vf *vFile) WaitCommitted() {
 }
 
 func (vf *vFile) WriteAt(b []byte, off int64) (n int, err error) {
-	n, err = vf.File.WriteAt(b, off)
+	// n, err = vf.File.WriteAt(b, off)
+	n = copy(vf.buf[int(off)-vf.syncpos:], b)
+	// fmt.Printf("%p|write in buf[%v,%v]\n", vf, int(off)-vf.syncpos, int(off)-vf.syncpos+n)
+	// fmt.Printf("%p|write vf in buf [%v,%v]\n", vf, int(off), int(off)+n)
+	vf.bufpos = int(off) + n - vf.syncpos
 	if err != nil {
 		return
 	}
@@ -289,6 +298,7 @@ func (vf *vFile) Load(groupId uint32, lsn uint64) (entry.Entry, error) {
 	entry := entry.GetBase()
 	metaBuf := entry.GetMetaBuf()
 	_, err = vf.ReadAt(metaBuf, int64(offset))
+	// fmt.Printf("%p|read meta [%v,%v]\n", vf, offset, offset+n)
 	if err != nil {
 		return nil, err
 	}
