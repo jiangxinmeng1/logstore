@@ -1,7 +1,7 @@
 package store
 
 import (
-	"encoding/binary"
+	// "encoding/binary"
 	"encoding/json"
 	"errors"
 	"sync"
@@ -16,6 +16,7 @@ import (
 )
 
 type vInfo struct {
+	vf          *vFile
 	Commits     map[uint32]*common.ClosedInterval
 	Checkpoints map[uint32]*common.ClosedIntervals
 	UncommitTxn map[uint32][]uint64 // 2% uncommit txn
@@ -24,6 +25,9 @@ type vInfo struct {
 
 	Addrs  map[uint32]map[uint64]int //group-groupLSN-offset 5%
 	addrmu sync.RWMutex
+
+	unloaded bool
+	loadmu   sync.Mutex
 }
 
 type VFileUncommitInfo struct {
@@ -39,30 +43,30 @@ type VFileAddress struct {
 }
 
 //result contains addr, addr size
-func MarshalAddrs(addrs []*VFileAddress) ([]byte, error) {
-	addrsBuf, err := json.Marshal(addrs)
-	if err != nil {
-		return nil, err
-	}
-	size := uint32(len(addrsBuf))
-	sizebuf := make([]byte, 4)
-	binary.BigEndian.PutUint32(sizebuf, size)
-	addrsBuf = append(addrsBuf, sizebuf...)
-	return addrsBuf, nil
-}
+// func MarshalAddrs(addrs []*VFileAddress) ([]byte, error) {
+// 	addrsBuf, err := json.Marshal(addrs)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	size := uint32(len(addrsBuf))
+// 	sizebuf := make([]byte, 4)
+// 	binary.BigEndian.PutUint32(sizebuf, size)
+// 	addrsBuf = append(addrsBuf, sizebuf...)
+// 	return addrsBuf, nil
+// }
 
 //marshal addresses, return remained bytes
-func UnmarshalAddrs(buf []byte) ([]byte, []*VFileAddress, error) {
-	addrs := make([]*VFileAddress, 0)
-	size := int(binary.BigEndian.Uint32(buf[len(buf)-4:]))
-	err := json.Unmarshal(buf[len(buf)-4-size:len(buf)-4], addrs)
-	if err != nil {
-		return nil, nil, err
-	}
-	return buf[:len(buf)-4-size], addrs, nil
-}
+// func UnmarshalAddrs(buf []byte) ([]byte, []*VFileAddress, error) {
+// 	addrs := make([]*VFileAddress, 0)
+// 	size := int(binary.BigEndian.Uint32(buf[len(buf)-4:]))
+// 	err := json.Unmarshal(buf[len(buf)-4-size:len(buf)-4], addrs)
+// 	if err != nil {
+// 		return nil, nil, err
+// 	}
+// 	return buf[:len(buf)-4-size], addrs, nil
+// }
 
-func newVInfo() *vInfo {
+func newVInfo(vf *vFile) *vInfo {
 	return &vInfo{
 		Commits:     make(map[uint32]*common.ClosedInterval),
 		Checkpoints: make(map[uint32]*common.ClosedIntervals),
@@ -71,21 +75,47 @@ func newVInfo() *vInfo {
 		TidCidMap: make(map[uint32]map[uint64]uint64),
 		Addrs:     make(map[uint32]map[uint64]int),
 		addrmu:    sync.RWMutex{},
+		vf:        vf,
 	}
 }
 
-func (info *vInfo) ReadMeta(vf *vFile) error {
-	buf := make([]byte, Metasize)
-	vf.ReadAt(buf, int64(vf.size)-int64(Metasize))
-	size := binary.BigEndian.Uint16(buf)
-	buf = make([]byte, int(size))
-	vf.ReadAt(buf, int64(vf.size)-int64(Metasize)-int64(size))
-	json.Unmarshal(buf, info)
-	if info == nil {
-		return errors.New("read vfile meta failed")
+func (info *vInfo) LoadMeta() error {
+	info.loadmu.Lock()
+	defer info.loadmu.Unlock()
+	if !info.unloaded {
+		return nil
 	}
+	err := info.vf.readMeta()
+	if err != nil {
+		return err
+	}
+	info.unloaded = false
 	return nil
 }
+
+func (info *vInfo) FreeMeta() {
+	info.loadmu.Lock()
+	defer info.loadmu.Unlock()
+	info.Commits = nil
+	info.Checkpoints = nil
+	info.UncommitTxn = nil
+	info.TidCidMap = nil
+	info.Addrs = nil
+	info.unloaded = true
+}
+
+// func (info *vInfo) ReadMeta(vf *vFile) error {
+// 	buf := make([]byte, Metasize)
+// 	vf.ReadAt(buf, int64(vf.size)-int64(Metasize))
+// 	size := binary.BigEndian.Uint16(buf)
+// 	buf = make([]byte, int(size))
+// 	vf.ReadAt(buf, int64(vf.size)-int64(Metasize)-int64(size))
+// 	json.Unmarshal(buf, info)
+// 	if info == nil {
+// 		return errors.New("read vfile meta failed")
+// 	}
+// 	return nil
+// }
 
 func (info *vInfo) MergeTidCidMap(tidCidMap map[uint32]map[uint64]uint64) {
 	for group, infoMap := range info.TidCidMap {
@@ -99,6 +129,7 @@ func (info *vInfo) MergeTidCidMap(tidCidMap map[uint32]map[uint64]uint64) {
 		tidCidMap[group] = gMap
 	}
 }
+
 func (info *vInfo) InTxnCommits(tidCidMap map[uint32]map[uint64]uint64, intervals map[uint32]*common.ClosedIntervals) bool {
 	for group, tids := range info.UncommitTxn {
 		tidMap, ok := tidCidMap[group]
@@ -121,15 +152,16 @@ func (info *vInfo) InTxnCommits(tidCidMap map[uint32]map[uint64]uint64, interval
 	}
 	return true
 }
+
 func (info *vInfo) MetatoBuf() []byte {
 	buf, _ := json.Marshal(info)
 	return buf
 }
 
-func (info *vInfo) GetCommits(groupId uint32) (commits common.ClosedInterval) {
-	commits = *info.Commits[groupId]
-	return commits
-}
+// func (info *vInfo) GetCommits(groupId uint32) (commits common.ClosedInterval) {
+// 	commits = *info.Commits[groupId]
+// 	return commits
+// }
 
 // func (info *vInfo) GetCheckpoints(groupId uint32) (checkpoint *common.ClosedInterval) {
 // 	checkpoint = make([]common.ClosedInterval, 0)

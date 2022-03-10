@@ -110,7 +110,6 @@ func OpenRotateFile(dir, name string, mu *sync.RWMutex, rotateChecker RotateChec
 				return nil, err
 			}
 			vf := &vFile{
-				vInfo:      *newVInfo(),
 				RWMutex:    &sync.RWMutex{},
 				File:       file,
 				version:    version,
@@ -118,7 +117,8 @@ func OpenRotateFile(dir, name string, mu *sync.RWMutex, rotateChecker RotateChec
 				history:    rf.history,
 				size:       int(f.Size()),
 			}
-			vf.ReadMeta(vf)
+			vf.vInfo=newVInfo(vf)
+			// vf.ReadMeta()
 			vfiles = append(vfiles, vf)
 		}
 		sort.Slice(vfiles, func(i, j int) bool {

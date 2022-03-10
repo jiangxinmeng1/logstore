@@ -3,21 +3,33 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"github.com/jiangxinmeng1/logstore/example/wal/sm"
-	"github.com/jiangxinmeng1/logstore/pkg/common"
-	"github.com/jiangxinmeng1/logstore/pkg/store"
 	"os"
 	"sync"
 	"time"
 
+	"github.com/jiangxinmeng1/logstore/example/wal/sm"
+	"github.com/jiangxinmeng1/logstore/pkg/common"
+	"github.com/jiangxinmeng1/logstore/pkg/store"
+
 	"github.com/panjf2000/ants/v2"
 	log "github.com/sirupsen/logrus"
+
+	"net/http"
+	_ "net/http/pprof"
+	// "runtime/pprof"
 )
 
 func main() {
+	go func() {
+        if err := http.ListenAndServe(":6060", nil); err != nil {
+            log.Fatal(err)
+        }
+        os.Exit(0)
+    }()
+
 	dir := "/tmp/walexample"
 	os.RemoveAll(dir)
-	checker := store.NewMaxSizeRotateChecker(int(common.K) * 10)
+	checker := store.NewMaxSizeRotateChecker(int(common.M) * 64)
 	cfg := &store.StoreCfg{
 		RotateChecker: checker,
 	}
@@ -30,12 +42,13 @@ func main() {
 
 	lsn := uint64(0)
 	now := time.Now()
-	for i := 0; i < 100000; i++ {
+	for i := 0; i < 10000000; i++ {
 		insert := func() {
 			defer wg.Done()
 			var bs bytes.Buffer
 			i := common.NextGlobalSeqNum()
 			bs.WriteString(fmt.Sprintf("request-%d", i))
+			// fmt.Printf("bs is %s\n",bs.Bytes())
 			r := &sm.Request{
 				Op:   sm.TInsert,
 				Data: bs.Bytes(),
@@ -54,6 +67,9 @@ func main() {
 		}
 	}
 
+	// f,_:=os.Create("./cpuProf")
+	// p:=pprof.Lookup("allocs")
+	// p.WriteTo(f,0)
 	wg.Wait()
 	machine.Close()
 	log.Infof("It takes %s", time.Since(now))

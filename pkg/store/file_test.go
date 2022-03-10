@@ -147,7 +147,7 @@ func TestAppender(t *testing.T) {
 }
 
 func TestVInfo(t *testing.T) {
-	vinfo := *newVInfo()
+	vinfo := *newVInfo(nil)
 	end := 10
 	for i := 0; i <= end; i++ {
 		commitInfo := &entry.Info{Group: entry.GTCustomizedStart, CommitId: uint64(i)}

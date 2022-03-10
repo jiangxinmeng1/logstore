@@ -3,6 +3,7 @@ package store
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -29,7 +30,7 @@ type vFileState struct {
 type vFile struct {
 	*sync.RWMutex
 	*os.File
-	vInfo
+	*vInfo
 	version    int
 	committed  int32
 	size       int
@@ -50,9 +51,7 @@ func newVFile(mu *sync.RWMutex, name string, version int, history History) (*vFi
 	if err != nil {
 		return nil, err
 	}
-
-	return &vFile{
-		vInfo:      *newVInfo(),
+	vf := &vFile{
 		RWMutex:    mu,
 		File:       file,
 		version:    version,
@@ -60,7 +59,9 @@ func newVFile(mu *sync.RWMutex, name string, version int, history History) (*vFi
 		history:    history,
 		buf:        make([]byte, DefaultBufSize),
 		bufSize:    int(DefaultBufSize),
-	}, nil
+	}
+	vf.vInfo = newVInfo(vf)
+	return vf, nil
 }
 
 func (vf *vFile) InCommits(intervals map[uint32]*common.ClosedIntervals) bool {
@@ -173,6 +174,7 @@ func (vf *vFile) Commit() {
 	atomic.StoreInt32(&vf.committed, int32(1))
 	vf.commitCond.Broadcast()
 	vf.commitCond.L.Unlock()
+	vf.FreeMeta()
 }
 
 func (vf *vFile) Sync() error {
@@ -291,6 +293,13 @@ func (vf *vFile) OnNewUncommit(addrs []*VFileAddress) {
 }
 
 func (vf *vFile) Load(groupId uint32, lsn uint64) (entry.Entry, error) {
+	if vf.HasCommitted() {
+		err := vf.LoadMeta()
+		defer vf.FreeMeta()
+		if err != nil {
+			return nil, err
+		}
+	}
 	offset, err := vf.GetOffsetByLSN(groupId, lsn)
 	if err != nil {
 		return nil, err
@@ -304,4 +313,17 @@ func (vf *vFile) Load(groupId uint32, lsn uint64) (entry.Entry, error) {
 	}
 	_, err = entry.ReadAt(vf.File, offset)
 	return entry, err
+}
+
+func (vf *vFile) readMeta() error {
+	buf := make([]byte, Metasize)
+	vf.ReadAt(buf, int64(vf.size)-int64(Metasize))
+	size := binary.BigEndian.Uint16(buf)
+	buf = make([]byte, int(size))
+	vf.ReadAt(buf, int64(vf.size)-int64(Metasize)-int64(size))
+	json.Unmarshal(buf, vf.vInfo)
+	if vf.vInfo == nil {
+		return errors.New("read vfile meta failed")
+	}
+	return nil
 }

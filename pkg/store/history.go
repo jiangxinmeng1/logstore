@@ -136,6 +136,7 @@ func (h *history) TryTruncate() error {
 	h.mu.RUnlock()
 	for i := len(entries) - 1; i >= 0; i-- {
 		e := entries[i]
+		e.LoadMeta()
 		wrapper := entryWrapper{entry: e}
 		e.MergeTidCidMap(tidCidMap)
 		if e.InCommits(gIntervals) && e.InCheckpoint(gIntervals) && e.InTxnCommits(tidCidMap, gIntervals) {
@@ -144,6 +145,7 @@ func (h *history) TryTruncate() error {
 			continue
 		}
 		e.MergeCheckpoint(gIntervals)
+		e.FreeMeta()
 	}
 	h.mu.Lock()
 	for _, wrapper := range toDelete {

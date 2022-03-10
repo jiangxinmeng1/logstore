@@ -32,6 +32,8 @@ type VFile interface {
 	MergeTidCidMap(map[uint32]map[uint64]uint64)
 	Replay(ReplayHandle, ReplayObserver) error
 	Load(groupId uint32, lsn uint64) (entry.Entry, error)
+	LoadMeta() error
+	FreeMeta()
 }
 
 type FileAppender interface {
