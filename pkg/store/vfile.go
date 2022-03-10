@@ -33,13 +33,13 @@ type vFile struct {
 	*vInfo
 	version    int
 	committed  int32
-	size       int
+	size       int //update when write
 	wg         sync.WaitGroup
 	commitCond sync.Cond
 	history    History
 	buf        []byte
-	syncpos    int
-	bufpos     int
+	bufpos     int //update when write
+	syncpos    int //update when sync
 	bufSize    int
 }
 
@@ -155,7 +155,7 @@ func (vf *vFile) HasCommitted() bool {
 func (vf *vFile) PrepareWrite(size int) {
 	// fmt.Printf("PrepareWrite %s\n", vf.Name())
 	vf.wg.Add(1)
-	vf.size += size
+	// vf.size += size
 	// fmt.Printf("\n%p|prepare write %d->%d\n", vf, vf.size-size, vf.size)
 }
 
@@ -170,6 +170,7 @@ func (vf *vFile) Commit() {
 	vf.WriteMeta()
 	vf.Sync()
 	fmt.Printf("sync-%s\n", vf.String())
+	vf.buf = nil
 	vf.commitCond.L.Lock()
 	atomic.StoreInt32(&vf.committed, int32(1))
 	vf.commitCond.Broadcast()
@@ -178,31 +179,37 @@ func (vf *vFile) Commit() {
 }
 
 func (vf *vFile) Sync() error {
-	_, err := vf.File.WriteAt(vf.buf[:vf.bufpos], int64(vf.syncpos))
+	if vf.buf == nil {
+		vf.File.Sync()
+		return nil
+	}
+	n, err := vf.File.WriteAt(vf.buf[:vf.bufpos], int64(vf.syncpos))
 	if err != nil {
 		return err
 	}
-	vf.File.Sync()
-	// fmt.Printf("%p|sync [%v,%v](total%v|n=%d)\n", vf, vf.syncpos, vf.syncpos+vf.bufpos, vf.bufpos,n)
-	buf := make([]byte, 10)
-	_, err = vf.ReadAt(buf, int64(vf.syncpos))
+	fmt.Printf("%p|sync [%v,%v](total%v|n=%d)\n", vf, vf.syncpos, vf.syncpos+vf.bufpos, vf.bufpos,n)
+	// buf := make([]byte, 10)
+	// _, err = vf.ReadAt(buf, int64(vf.syncpos))
 	// fmt.Printf("%p|read at %v, buf is %v, n=%d, err is %v\n", vf, vf.syncpos, buf, n, err)
 	vf.syncpos += vf.bufpos
+	fmt.Printf("syncpos is %v\n",vf.syncpos)
 	if vf.syncpos != vf.size {
 		panic(fmt.Sprintf("%p|logic error, sync %v, size %v", vf, vf.syncpos, vf.size))
 	}
 	vf.bufpos = 0
+	// fmt.Printf("199bufpos is %v\n",vf.bufpos)
+	vf.File.Sync()
 	return nil
 }
 
 func (vf *vFile) WriteMeta() {
 	buf := vf.MetatoBuf()
 	n, _ := vf.WriteAt(buf, int64(vf.size))
-	vf.size += n
+	// vf.size += n
 	buf = make([]byte, Metasize)
 	binary.BigEndian.PutUint16(buf, uint16(n))
 	n, _ = vf.WriteAt(buf, int64(vf.size))
-	vf.size += n
+	// vf.size += n
 }
 
 func (vf *vFile) WaitCommitted() {
@@ -218,10 +225,24 @@ func (vf *vFile) WaitCommitted() {
 
 func (vf *vFile) WriteAt(b []byte, off int64) (n int, err error) {
 	// n, err = vf.File.WriteAt(b, off)
+	dataLength := len(b)
+	if vf.buf == nil || dataLength > vf.bufSize {
+		vf.Sync()
+		n, err := vf.File.WriteAt(b, int64(vf.syncpos))
+		fmt.Printf("%p|write vf in buf [%v,%v]\n", vf, vf.syncpos, vf.syncpos+n)
+		vf.syncpos += n
+		vf.size += n
+		return n, err
+	}
+	if dataLength+int(off)-vf.syncpos > vf.bufSize {
+		vf.Sync()
+	}
 	n = copy(vf.buf[int(off)-vf.syncpos:], b)
-	// fmt.Printf("%p|write in buf[%v,%v]\n", vf, int(off)-vf.syncpos, int(off)-vf.syncpos+n)
-	// fmt.Printf("%p|write vf in buf [%v,%v]\n", vf, int(off), int(off)+n)
+	fmt.Printf("%p|write in buf[%v,%v]\n", vf, int(off)-vf.syncpos, int(off)-vf.syncpos+n)
+	fmt.Printf("%p|write vf in buf [%v,%v]\n", vf, int(off), int(off)+n)
 	vf.bufpos = int(off) + n - vf.syncpos
+	// fmt.Printf("243bufpos is %v\n",vf.bufpos)
+	vf.size+= n
 	if err != nil {
 		return
 	}

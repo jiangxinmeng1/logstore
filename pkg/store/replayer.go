@@ -141,25 +141,26 @@ func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
 	case entry.ETUncommitted:
 		// fmt.Printf("ETUncommitted\n")
 		infobuf := e.GetInfoBuf()
-		addrs := make([]*VFileAddress, 0)
-		json.Unmarshal(infobuf, &addrs)
-		for _, addr := range addrs {
-			tidMap, ok := r.uncommit[addr.Group]
+		info := &entry.Info{}
+		// addrs := make([]*VFileAddress, 0)
+		json.Unmarshal(infobuf, &info)
+		for _, tinfo := range info.Uncommits {
+			tidMap, ok := r.uncommit[tinfo.Group]
 			if !ok {
 				tidMap = make(map[uint64][]*replayEntry)
 			}
-			entries, ok := tidMap[addr.LSN]
+			entries, ok := tidMap[info.TxnId]
 			if !ok {
 				entries = make([]*replayEntry, 0)
 			}
 			replayEty := &replayEntry{
 				payload: make([]byte, e.GetPayloadSize()),
-				info:    addr,
+				// info:    addr,
 			}
 			copy(replayEty.payload, e.GetPayload())
 			entries = append(entries, replayEty)
-			tidMap[addr.LSN] = entries
-			r.uncommit[addr.Group] = tidMap
+			tidMap[info.TxnId] = entries
+			r.uncommit[tinfo.Group] = tidMap
 		}
 	case entry.ETTxn:
 		// fmt.Printf("ETTxn\n")

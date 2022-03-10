@@ -1,12 +1,13 @@
 package sm
 
 import (
+	"sync"
+	"sync/atomic"
+
 	"github.com/jiangxinmeng1/logstore/pkg/common"
 	"github.com/jiangxinmeng1/logstore/pkg/entry"
 	statemachine "github.com/jiangxinmeng1/logstore/pkg/sm"
 	"github.com/jiangxinmeng1/logstore/pkg/store"
-	"sync"
-	"sync/atomic"
 
 	"github.com/sirupsen/logrus"
 )
@@ -100,7 +101,7 @@ func (sm *stateMachine) VisibleLSN() uint64 {
 
 func (sm *stateMachine) makeRoomForInsert(buf []byte) *Row {
 	row := newRow()
-	sm.rows = append(sm.rows, row)
+	// sm.rows = append(sm.rows, row)
 	return row
 }
 

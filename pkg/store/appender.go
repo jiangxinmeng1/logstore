@@ -75,7 +75,7 @@ func (appender *fileAppender) Write(data []byte) (int, error) {
 
 func (appender *fileAppender) Commit() error {
 	err := appender.rollbackState.file.Log(appender.info)
-	appender.rollbackState.file.bufpos = appender.tempPos
+	// appender.rollbackState.file.bufpos = appender.tempPos
 	if err != nil {
 		return err
 	}

@@ -16,10 +16,13 @@ import (
 
 	"net/http"
 	_ "net/http/pprof"
-	// "runtime/pprof"
+	"runtime/pprof"
+	// "runtime/trace"
 )
 
 func main() {
+	// trace.Sta
+
 	go func() {
         if err := http.ListenAndServe(":6060", nil); err != nil {
             log.Fatal(err)
@@ -40,9 +43,13 @@ func main() {
 	var wg sync.WaitGroup
 	pool, _ := ants.NewPool(100)
 
+	f,_:=os.Create("./cpuProf")
+	pprof.StartCPUProfile(f)
+	defer pprof.StopCPUProfile()
+
 	lsn := uint64(0)
 	now := time.Now()
-	for i := 0; i < 10000000; i++ {
+	for i := 0; i < 5000000; i++ {
 		insert := func() {
 			defer wg.Done()
 			var bs bytes.Buffer
@@ -67,9 +74,6 @@ func main() {
 		}
 	}
 
-	// f,_:=os.Create("./cpuProf")
-	// p:=pprof.Lookup("allocs")
-	// p.WriteTo(f,0)
 	wg.Wait()
 	machine.Close()
 	log.Infof("It takes %s", time.Since(now))

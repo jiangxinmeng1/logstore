@@ -12,7 +12,7 @@ func newRow() *Row {
 }
 
 func (t *Row) Fill(e entry.Entry) {
-	t.lsn = e.GetInfo().(*entry.Info).CommitId
-	t.data = make([]byte, e.GetPayloadSize())
-	copy(t.data, e.GetPayload())
+	// t.lsn = e.GetInfo().(*entry.Info).CommitId
+	// t.data = make([]byte, e.GetPayloadSize())
+	// copy(t.data, e.GetPayload())
 }

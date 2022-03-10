@@ -96,24 +96,24 @@ func (bs *baseStore) PrepareEntry(e entry.Entry) (entry.Entry, error) {
 	v := v1.(*entry.Info)
 	v.Info = &VFileAddress{}
 	switch v.Group {
-	case entry.GTUncommit:
-		addrs := make([]*VFileAddress, 0)
-		for _, tids := range v.Uncommits {
-			addr := bs.GetLastAddr(tids.Group, tids.Tid)
-			if addr == nil {
-				addr = &VFileAddress{}
-			}
-			addr.Group = tids.Group
-			addr.LSN = tids.Tid
-			addrs = append(addrs, addr)
-		}
-		buf, err := json.Marshal(addrs)
-		if err != nil {
-			return nil, err
-		}
-		e.SetInfoSize(len(buf))
-		e.SetInfoBuf(buf)
-		return e, nil
+	// case entry.GTUncommit:
+	// 	addrs := make([]*VFileAddress, 0)
+	// 	for _, tids := range v.Uncommits {
+	// 		addr := bs.GetLastAddr(tids.Group, tids.Tid)
+	// 		if addr == nil {
+	// 			addr = &VFileAddress{}
+	// 		}
+	// 		addr.Group = tids.Group
+	// 		addr.LSN = tids.Tid
+	// 		addrs = append(addrs, addr)
+	// 	}
+	// 	buf, err := json.Marshal(addrs)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	e.SetInfoSize(len(buf))
+	// 	e.SetInfoBuf(buf)
+	// 	return e, nil
 	default:
 		buf, err := json.Marshal(v)
 		if err != nil {
