@@ -1,10 +1,12 @@
 package entry
 
 import (
+	"math/rand"
 	"fmt"
 	"io"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/jiangxinmeng1/logstore/pkg/common"
 )
@@ -24,6 +26,7 @@ type Base struct {
 	info    interface{}
 	infobuf []byte
 	wg      sync.WaitGroup
+	t0      time.Time
 	err     error
 }
 
@@ -61,18 +64,18 @@ func (info *Info) ToString() string {
 		for _, ranges := range info.Checkpoints {
 			s = fmt.Sprintf("%s G%d-%v", s, ranges.Group, ranges.Ranges)
 		}
-		s = fmt.Sprintf("%s\n",s)
+		s = fmt.Sprintf("%s\n", s)
 		return s
 	case GTUncommit:
 		s := "uncommit entry"
 		for _, tid := range info.Uncommits {
 			s = fmt.Sprintf("%s G%d-%d", s, tid.Group, tid.Tid)
 		}
-		s = fmt.Sprintf("%s\n",s)
+		s = fmt.Sprintf("%s\n", s)
 		return s
 	default:
 		s := fmt.Sprintf("customized entry G%d<%d>{T%d,C%d}", info.Group, info.GroupLSN, info.TxnId, info.CommitId)
-		s = fmt.Sprintf("%s\n",s)
+		s = fmt.Sprintf("%s\n", s)
 		return s
 	}
 }
@@ -122,7 +125,12 @@ func GetBase() *Base {
 	b.wg.Add(1)
 	return b
 }
-
+func (b *Base) StartTime() {
+	b.t0 = time.Now()
+}
+func (b *Base) Duration() time.Duration {
+	return time.Since(b.t0)
+}
 func (b *Base) reset() {
 	b.descriptor.reset()
 	if b.node != nil {
@@ -147,6 +155,10 @@ func (b *Base) GetError() error {
 
 func (b *Base) WaitDone() error {
 	b.wg.Wait()
+	a:=rand.Intn(10000)
+	if a==33{
+		fmt.Printf("entry takes %v \n",b.Duration())
+	}
 	return b.err
 }
 

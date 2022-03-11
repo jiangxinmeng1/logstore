@@ -18,7 +18,7 @@ import (
 )
 
 var Metasize = 2
-var DefaultBufSize = common.M
+var DefaultBufSize = common.M * 20
 
 type vFileState struct {
 	bufPos  int
@@ -178,25 +178,31 @@ func (vf *vFile) Commit() {
 	vf.FreeMeta()
 }
 
+//TODO reuse wait sync
 func (vf *vFile) Sync() error {
 	if vf.buf == nil {
 		vf.File.Sync()
 		return nil
 	}
-	n, err := vf.File.WriteAt(vf.buf[:vf.bufpos], int64(vf.syncpos))
+	vf.Lock()
+	targetSize := vf.size //TODO race size, bufpos
+	targetpos := vf.bufpos
+	_, err := vf.File.WriteAt(vf.buf[:targetpos], int64(vf.syncpos))
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%p|sync [%v,%v](total%v|n=%d)\n", vf, vf.syncpos, vf.syncpos+vf.bufpos, vf.bufpos,n)
+	//TODO safe (call by write at, call by store)
+	// fmt.Printf("%p|sync [%v,%v](total%v|n=%d)\n", vf, vf.syncpos, vf.syncpos+vf.bufpos, vf.bufpos, n)
 	// buf := make([]byte, 10)
 	// _, err = vf.ReadAt(buf, int64(vf.syncpos))
 	// fmt.Printf("%p|read at %v, buf is %v, n=%d, err is %v\n", vf, vf.syncpos, buf, n, err)
-	vf.syncpos += vf.bufpos
-	fmt.Printf("syncpos is %v\n",vf.syncpos)
-	if vf.syncpos != vf.size {
-		panic(fmt.Sprintf("%p|logic error, sync %v, size %v", vf, vf.syncpos, vf.size))
+	vf.syncpos += targetpos
+	// fmt.Printf("syncpos is %v\n", vf.syncpos)
+	if vf.syncpos != targetSize {
+		panic(fmt.Sprintf("%p|logic error, sync %v, size %v", vf, vf.syncpos, targetSize))
 	}
 	vf.bufpos = 0
+	vf.Unlock()
 	// fmt.Printf("199bufpos is %v\n",vf.bufpos)
 	vf.File.Sync()
 	return nil
@@ -223,26 +229,43 @@ func (vf *vFile) WaitCommitted() {
 	vf.commitCond.L.Unlock()
 }
 
+func (vf *vFile) PrepareSync() {
+	// write at buf -> wait sync buf
+	// wait sync size
+	// wait sync bufsize
+}
+
+//TODO alloc&free buf
 func (vf *vFile) WriteAt(b []byte, off int64) (n int, err error) {
 	// n, err = vf.File.WriteAt(b, off)
 	dataLength := len(b)
-	if vf.buf == nil || dataLength > vf.bufSize {
-		vf.Sync()
-		n, err := vf.File.WriteAt(b, int64(vf.syncpos))
-		fmt.Printf("%p|write vf in buf [%v,%v]\n", vf, vf.syncpos, vf.syncpos+n)
-		vf.syncpos += n
-		vf.size += n
-		return n, err
+	// if vf.buf == nil || dataLength > vf.bufSize {
+	// 	vf.Sync()
+	// 	n, err := vf.File.WriteAt(b, int64(vf.syncpos))
+	// 	// fmt.Printf("%p|write vf in buf [%v,%v]\n", vf, vf.syncpos, vf.syncpos+n)
+	// 	vf.syncpos += n
+	// 	vf.size += n
+	// 	return n, err
+	// }
+	// if dataLength+int(off)-vf.syncpos > vf.bufSize {
+	// 	vf.Sync()
+	// }
+	vf.Lock()
+	if vf.buf == nil {
+		vf.bufpos = 0
+		vf.buf = make([]byte, dataLength)
 	}
 	if dataLength+int(off)-vf.syncpos > vf.bufSize {
-		vf.Sync()
+		vf.buf = append(vf.buf, make([]byte, dataLength)...)
 	}
 	n = copy(vf.buf[int(off)-vf.syncpos:], b)
-	fmt.Printf("%p|write in buf[%v,%v]\n", vf, int(off)-vf.syncpos, int(off)-vf.syncpos+n)
-	fmt.Printf("%p|write vf in buf [%v,%v]\n", vf, int(off), int(off)+n)
+	// fmt.Printf("%p|write in buf[%v,%v]\n", vf, int(off)-vf.syncpos, int(off)-vf.syncpos+n)
+	// fmt.Printf("%p|write vf in buf [%v,%v]\n", vf, int(off), int(off)+n)
 	vf.bufpos = int(off) + n - vf.syncpos
+	vf.size += n
+	// fmt.Printf("%p|size is %v\n",vf,vf.size)
+	vf.Unlock()
 	// fmt.Printf("243bufpos is %v\n",vf.bufpos)
-	vf.size+= n
 	if err != nil {
 		return
 	}
@@ -258,6 +281,8 @@ func (vf *vFile) Write(b []byte) (n int, err error) {
 }
 
 func (vf *vFile) SizeLocked() int {
+	vf.RLock()
+	defer vf.RUnlock()
 	return vf.size
 }
 

@@ -2,6 +2,8 @@ package entry
 
 import (
 	"io"
+	"time"
+
 	"github.com/jiangxinmeng1/logstore/pkg/common"
 )
 
@@ -56,4 +58,7 @@ type Entry interface {
 	GetError() error
 
 	Free()
+
+	Duration() time.Duration
+	StartTime()
 }

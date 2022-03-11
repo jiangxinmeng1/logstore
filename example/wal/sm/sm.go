@@ -40,8 +40,8 @@ func NewStateMachine(dir string, walCfg *store.StoreCfg) (*stateMachine, error) 
 	}
 	sm.pipeline = newPipeline(sm)
 	wg := new(sync.WaitGroup)
-	waitingQueue := statemachine.NewWaitableQueue(1000, 1, sm, wg, nil, nil, sm.onEntries)
-	checkpointQueue := statemachine.NewWaitableQueue(100, 1, sm, wg, nil, nil, sm.checkpoint)
+	waitingQueue := statemachine.NewWaitableQueue(100000, 1, sm, wg, nil, nil, sm.onEntries)
+	checkpointQueue := statemachine.NewWaitableQueue(10000, 1, sm, wg, nil, nil, sm.checkpoint)
 	sm.StateMachine = statemachine.NewStateMachine(wg, sm, waitingQueue, checkpointQueue)
 	sm.Start()
 	return sm, nil

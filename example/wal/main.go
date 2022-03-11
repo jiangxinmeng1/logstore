@@ -41,7 +41,7 @@ func main() {
 		panic(err)
 	}
 	var wg sync.WaitGroup
-	pool, _ := ants.NewPool(100)
+	pool, _ := ants.NewPool(10000)
 
 	f,_:=os.Create("./cpuProf")
 	pprof.StartCPUProfile(f)
@@ -49,7 +49,7 @@ func main() {
 
 	lsn := uint64(0)
 	now := time.Now()
-	for i := 0; i < 5000000; i++ {
+	for i := 0; i < 1000000; i++ {
 		insert := func() {
 			defer wg.Done()
 			var bs bytes.Buffer

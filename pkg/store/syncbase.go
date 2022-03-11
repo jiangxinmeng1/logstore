@@ -72,7 +72,7 @@ func (base *syncBase) OnEntryReceived(e entry.Entry) error {
 		switch v.Group {
 		case entry.GTCKp:
 			for _, intervals := range v.Checkpoints {
-				base.checkpointing[intervals.Group] = intervals.Ranges.Intervals[0].End//TODO calculate the first range
+				base.checkpointing[intervals.Group] = intervals.Ranges.Intervals[0].End //TODO calculate the first range
 			}
 		case entry.GTUncommit:
 			// addr := v.Addr.(*VFileAddress)
@@ -146,18 +146,33 @@ func (base *syncBase) SetSynced(groupId uint32, id uint64) {
 	base.synced.Unlock()
 }
 
-func (base *syncBase) OnCommit() {
-	for group, checkpointingId := range base.checkpointing {
+func (base *syncBase) OnCommit(commitInfo *prepareCommit) {
+	for group, checkpointingId := range commitInfo.checkpointing {
 		checkpointedId := base.GetCheckpointed(group)
 		if checkpointingId > checkpointedId {
 			base.SetCheckpointed(group, checkpointingId)
 		}
 	}
 
-	for group, syncingId := range base.syncing {
+	for group, syncingId := range commitInfo.syncing {
 		syncedId := base.GetSynced(group)
 		if syncingId > syncedId {
 			base.SetSynced(group, syncingId)
 		}
+	}
+}
+
+func (base *syncBase) PrepareCommit() *prepareCommit {
+	checkpointing := make(map[uint32]uint64)
+	for group, checkpointingId := range base.checkpointing {
+		checkpointing[group] = checkpointingId
+	}
+	syncing := make(map[uint32]uint64)
+	for group, syncingId := range base.syncing {
+		syncing[group] = syncingId
+	}
+	return &prepareCommit{
+		checkpointing: checkpointing,
+		syncing:       syncing,
 	}
 }
