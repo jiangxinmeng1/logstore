@@ -123,7 +123,7 @@ func (sm *stateMachine) checkpoint(_ ...interface{}) {
 		}},
 	}
 	e.SetInfo(ckpInfo)
-	err := sm.wal.AppendEntry(e)
+	_,err := sm.wal.AppendEntry(e)
 	if err != nil {
 		return
 	}

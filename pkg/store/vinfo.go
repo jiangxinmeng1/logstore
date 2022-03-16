@@ -78,7 +78,9 @@ func newVInfo(vf *vFile) *vInfo {
 		vf:        vf,
 	}
 }
-
+func (info *vInfo) OnReplay(r *replayer) {
+	info.Addrs = r.vinfoAddrs
+}
 func (info *vInfo) LoadMeta() error {
 	info.loadmu.Lock()
 	defer info.loadmu.Unlock()

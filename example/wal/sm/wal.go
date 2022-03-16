@@ -36,12 +36,12 @@ func (wal *Wal) PrepareLog(op OpT, item []byte) (entry.Entry, error) {
 	e.SetPayloadSize(len(item))
 	e.Unmarshal(item)
 	id := wal.idAlloc.Alloc()
-	info:=&entry.Info{
-		Group: entry.GTCustomizedStart,
+	info := &entry.Info{
+		Group:    entry.GTCustomizedStart,
 		CommitId: id,
 	}
 	e.SetInfo(info)
-	err = wal.AppendEntry(e)
+	_, err = wal.AppendEntry(e)
 	return e, err
 }
 

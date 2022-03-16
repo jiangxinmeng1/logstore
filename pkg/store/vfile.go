@@ -206,11 +206,11 @@ func (vf *vFile) Sync() error {
 		panic(fmt.Sprintf("%p|logic error, sync %v, size %v", vf, vf.syncpos, targetSize))
 	}
 	vf.bufpos = 0
-	vf.Unlock()
 	// fmt.Printf("199bufpos is %v\n",vf.bufpos)
 	t0 = time.Now()
 	vf.File.Sync()
 	syncDuration += time.Since(t0)
+	vf.Unlock()
 	return nil
 }
 
@@ -302,16 +302,17 @@ func (vf *vFile) Destroy() error {
 	return err
 }
 
-func (vf *vFile) Replay(handle ReplayHandle, observer ReplayObserver) error {
+func (vf *vFile) Replay(r *replayer, observer ReplayObserver) error {
 	observer.OnNewEntry(vf.Id())
 	for {
-		if err := handle(vf, vf); err != nil {
+		if err := r.replayHandler(vf, vf); err != nil {
 			if errors.Is(err, io.EOF) {
 				break
 			}
 			return err
 		}
 	}
+	vf.OnReplay(r)
 	return nil
 }
 

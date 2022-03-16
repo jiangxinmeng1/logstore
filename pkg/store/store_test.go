@@ -85,7 +85,7 @@ func TestStore(t *testing.T) {
 		n.Buf = n.Buf[:len(buf)]
 		copy(n.GetBuf(), buf)
 		e.UnmarshalFromNode(n, true)
-		err := s.AppendEntry(e)
+		_, err := s.AppendEntry(e)
 		assert.Nil(t, err)
 		fwg.Add(1)
 		ch <- e
@@ -227,8 +227,8 @@ func TestUncommitEntry(t *testing.T) {
 				assert.Nil(t, err)
 				v := e.GetInfo()
 				if v != nil {
-					info:=v.(*entry.Info)
-					t.Logf("group-%d",info.Group)
+					info := v.(*entry.Info)
+					t.Logf("group-%d", info.Group)
 					t.Logf("synced %d", s.GetSynced(info.Group))
 					t.Logf("checkpointed %d", s.GetCheckpointed(info.Group))
 					t.Logf("penddings %d", s.GetPenddings(info.Group))
@@ -465,12 +465,17 @@ func TestReplay(t *testing.T) {
 	}
 	r := newReplayer(a)
 	o := &noopObserver{}
-	err = s.file.Replay(r.replayHandler, o)
+	err = s.file.Replay(r, o)
 	if err != nil {
 		fmt.Printf("err is %v", err)
 	}
 	r.Apply()
 	s.Close()
+}
+
+type entryWithLSN struct {
+	entry entry.Entry
+	lsn   uint64
 }
 
 func TestLoad(t *testing.T) {
@@ -485,7 +490,8 @@ func TestLoad(t *testing.T) {
 
 	var wg sync.WaitGroup
 	var fwg sync.WaitGroup
-	ch := make(chan entry.Entry, 1000)
+	ch := make(chan *entryWithLSN, 1000)
+	ch2 := make([]*entryWithLSN,0)
 	ctx, cancel := context.WithCancel(context.Background())
 	wg.Add(1)
 	go func() {
@@ -495,15 +501,15 @@ func TestLoad(t *testing.T) {
 			case <-ctx.Done():
 				return
 			case e := <-ch:
-				err := e.WaitDone()
+				err := e.entry.WaitDone()
 				assert.Nil(t, err)
-				infoin := e.GetInfo()
-				fmt.Printf("entry is %s", e.GetPayload())
+				infoin := e.entry.GetInfo()
+				fmt.Printf("entry is %s", e.entry.GetPayload())
 				if infoin != nil {
 					info := infoin.(*entry.Info)
 					var loadedEntry entry.Entry
 					for i := 0; i < 5; i++ {
-						loadedEntry, err = s.Load(info.Group, info.GroupLSN)
+						loadedEntry, err = s.Load(info.Group, e.lsn)
 						if err == nil {
 							fmt.Printf("loaded entry is %s", loadedEntry.GetPayload())
 							break
@@ -517,6 +523,7 @@ func TestLoad(t *testing.T) {
 					t.Logf("penddings %d", s.GetPenddings(info.Group))
 				}
 				fwg.Done()
+				ch2=append(ch2, e)
 			}
 		}
 	}()
@@ -610,12 +617,16 @@ func TestLoad(t *testing.T) {
 					copy(n.GetBuf(), buf)
 					e.UnmarshalFromNode(n, true)
 				}
-				err := s.AppendEntry(e)
+				lsn, err := s.AppendEntry(e)
 				if err != nil {
 					fmt.Printf("err is %v\n", err)
 				}
+				entrywithlsn:=&entryWithLSN{
+					entry: e,
+					lsn: lsn,
+				}
 				assert.Nil(t, err)
-				ch <- e
+				ch <- entrywithlsn
 			}
 		}
 	}
@@ -641,12 +652,38 @@ func TestLoad(t *testing.T) {
 		fmt.Printf("%s", payload)
 		return nil
 	}
-	r := newReplayer(a)
-	o := &noopObserver{}
-	err = s.file.Replay(r.replayHandler, o)
-	if err != nil {
-		fmt.Printf("err is %v", err)
+	s.Replay(a)
+	// r := newReplayer(a)
+	// o := &noopObserver{}
+	// err = s.file.Replay(r.replayHandler, o)
+	// if err != nil {
+	// 	fmt.Printf("err is %v", err)
+	// }
+	// r.Apply()
+
+for _,e := range ch2{
+	err := e.entry.WaitDone()
+	assert.Nil(t, err)
+	infoin := e.entry.GetInfo()
+	fmt.Printf("entry is %s", e.entry.GetPayload())
+	if infoin != nil {
+		info := infoin.(*entry.Info)
+		var loadedEntry entry.Entry
+		for i := 0; i < 5; i++ {
+			loadedEntry, err = s.Load(info.Group, e.lsn)
+			if err == nil {
+				fmt.Printf("loaded entry is %s", loadedEntry.GetPayload())
+				break
+			}
+			fmt.Printf("%d-%d:%v\n", info.Group, info.GroupLSN, err)
+			time.Sleep(time.Millisecond * 500)
+		}
+		assert.Nil(t, err)
+		t.Logf("synced %d", s.GetSynced(info.Group))
+		t.Logf("checkpointed %d", s.GetCheckpointed(info.Group))
+		t.Logf("penddings %d", s.GetPenddings(info.Group))
 	}
-	r.Apply()
+}
+
 	s.Close()
 }

@@ -143,10 +143,10 @@ func OpenRotateFile(dir, name string, mu *sync.RWMutex, rotateChecker RotateChec
 	return rf, err
 }
 
-func (rf *rotateFile) Replay(r ReplayHandle, o ReplayObserver) error {
+func (rf *rotateFile) Replay(r *replayer, o ReplayObserver) error {
 	rf.history.Replay(r, o)
 	for _, vf := range rf.uncommitted {
-		vf.Replay(r, o)
+		vf.Replay(r, vf)
 	}
 	return nil
 }

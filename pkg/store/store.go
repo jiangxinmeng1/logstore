@@ -21,26 +21,27 @@ var (
 	DefaultBatchPerSync  = 100
 	DefaultSyncDuration  = time.Millisecond * 2
 	FlushEntry           entry.Entry
-	syncTimes            = 0
-	bySize               = 0
-	byDuration           = 0
-	syncDuration         = time.Second * 0
-	writeDuration        = time.Second * 0
-	syncQueueDuration    = time.Second * 0
-	syncLoopDuration     = time.Second * 0
-	flushQueueDuration   = time.Second * 0
-	flushLoop1Duration   = time.Second * 0
-	flushLoop2Duration   = time.Second * 0
-	onEntriesDuration    = time.Second * 0
-	tickerTimes          = 0
-	enqueueEntries       = int32(0)
+
+	syncTimes          = 0
+	bySize             = 0
+	byDuration         = 0
+	syncDuration       = time.Second * 0
+	writeDuration      = time.Second * 0
+	syncQueueDuration  = time.Second * 0
+	syncLoopDuration   = time.Second * 0
+	flushQueueDuration = time.Second * 0
+	flushLoop1Duration = time.Second * 0
+	flushLoop2Duration = time.Second * 0
+	onEntriesDuration  = time.Second * 0
+	tickerTimes        = 0
+	enqueueEntries     = int32(0)
 	// appendInterval       = time.Second * 0
 	append10µs  = 0
 	append1ms   = 0
 	append2ms   = 0
 	append3ms   = 0
 	appendgt3ms = 0
-	globalTime  = time.Now()
+	// globalTime  = time.Now().Unix()
 )
 
 func init() {
@@ -110,7 +111,7 @@ func (bs *baseStore) flushLoop() {
 			flushQueueDuration += time.Since(t1)
 			a := rand.Intn(100)
 			if a == 33 {
-				fmt.Printf("receive takes %v(%d entries appended)\n", time.Since(t1), enqueueEntries)
+				fmt.Printf("receive takes %v(%d entries appended)\n", time.Since(t1), atomic.LoadInt32(&enqueueEntries))
 			}
 			atomic.StoreInt32(&enqueueEntries, 0)
 			t1 = time.Now()
@@ -385,6 +386,12 @@ type prepareCommit struct {
 // }
 
 func (bs *baseStore) Close() error {
+	if !bs.TryClose() {
+		return nil
+	}
+	bs.flushWg.Wait()
+	bs.flushCancel()
+	bs.wg.Wait()
 	fmt.Printf("***********************\n")
 	fmt.Printf("%d|10µs|%d|1ms|%d|5ms|%d|10ms|%d\n",
 		append10µs, append1ms, append2ms, append3ms, appendgt3ms)
@@ -394,12 +401,6 @@ func (bs *baseStore) Close() error {
 	fmt.Printf("***********************\n")
 	fmt.Printf("sync %d times(S%dD%d)\nsync duration %v(avg%v)\nwrite durtion %v\nsync queue duration %v\nsync loop duration %v\n",
 		syncTimes, bySize, byDuration, syncDuration, time.Duration(int(syncDuration)/syncTimes), writeDuration, syncQueueDuration, syncLoopDuration)
-	if !bs.TryClose() {
-		return nil
-	}
-	bs.flushWg.Wait()
-	bs.flushCancel()
-	bs.wg.Wait()
 	return bs.file.Close()
 }
 
@@ -407,7 +408,8 @@ func (bs *baseStore) Checkpoint(e entry.Entry) (err error) {
 	if e.IsCheckpoint() {
 		return errors.New("wrong entry type")
 	}
-	return bs.AppendEntry(e)
+	_, err = bs.AppendEntry(e)
+	return
 }
 
 func (bs *baseStore) TryCompact() error {
@@ -418,36 +420,44 @@ func (bs *baseStore) TryTruncate(size int64) error {
 	return bs.file.TryTruncate(size)
 }
 
-func (bs *baseStore) AppendEntry(e entry.Entry) (err error) {
-	duration := time.Since(globalTime)
-	if duration < time.Microsecond*10 {
-		append10µs++
-	} else if duration < time.Millisecond {
-		append1ms++
-	} else if duration < time.Millisecond*5 {
-		append2ms++
-	} else if duration < time.Millisecond*10 {
-		append3ms++
-	} else {
-		appendgt3ms++
-	}
-	globalTime = time.Now()
+func (bs *baseStore) AppendEntry(e entry.Entry) (id uint64, err error) {
+	// duration := time.Since(globalTime)
+	// if duration < time.Microsecond*10 {
+	// 	append10µs++
+	// } else if duration < time.Millisecond {
+	// 	append1ms++
+	// } else if duration < time.Millisecond*5 {
+	// 	append2ms++
+	// } else if duration < time.Millisecond*10 {
+	// 	append3ms++
+	// } else {
+	// 	appendgt3ms++
+	// }
 	e.StartTime()
 	if bs.IsClosed() {
-		return common.ClosedErr
+		return 0, common.ClosedErr
 	}
 	bs.flushWg.Add(1)
 	if bs.IsClosed() {
 		bs.flushWg.Done()
-		return common.ClosedErr
+		return 0, common.ClosedErr
+	}
+	v1 := e.GetInfo()
+	var lsn uint64
+	if v1 != nil {
+		info := v1.(*entry.Info)
+		lsn = bs.AllocateLsn(info.Group)
+		info.GroupLSN = lsn
+		e.SetInfo(info)
 	}
 	bs.flushQueue <- e
+	// globalTime = time.Now()
 	atomic.AddInt32(&enqueueEntries, 1)
-	return nil
+	return lsn, nil
 }
 
 func (s *baseStore) Sync() error {
-	if err := s.AppendEntry(FlushEntry); err != nil {
+	if _, err := s.AppendEntry(FlushEntry); err != nil {
 		return err
 	}
 	// if err := s.writer.Flush(); err != nil {
@@ -460,7 +470,7 @@ func (s *baseStore) Sync() error {
 func (s *baseStore) Replay(h ApplyHandle) error {
 	r := newReplayer(h)
 	o := &noopObserver{}
-	err := s.file.Replay(r.replayHandler, o)
+	err := s.file.Replay(r, o)
 	if err != nil {
 		return err
 	}
@@ -472,6 +482,7 @@ func (s *baseStore) Replay(h ApplyHandle) error {
 	}
 	//TODO uncommit entry info
 	r.Apply()
+	s.OnReplay(r)
 	return nil
 }
 

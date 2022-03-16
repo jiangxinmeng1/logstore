@@ -30,10 +30,11 @@ type VFile interface {
 	InTxnCommits(map[uint32]map[uint64]uint64, map[uint32]*common.ClosedIntervals) bool
 	MergeCheckpoint(map[uint32]*common.ClosedIntervals)
 	MergeTidCidMap(map[uint32]map[uint64]uint64)
-	Replay(ReplayHandle, ReplayObserver) error
+	Replay(*replayer, ReplayObserver) error
 	Load(groupId uint32, lsn uint64) (entry.Entry, error)
 	LoadMeta() error
 	FreeMeta()
+	OnReplay(r *replayer)
 }
 
 type FileAppender interface {
@@ -70,7 +71,7 @@ type History interface {
 	DropEntry(int) (VFile, error)
 	OldestEntry() VFile
 	Empty() bool
-	Replay(ReplayHandle, ReplayObserver) error
+	Replay(*replayer, ReplayObserver) error
 	TryTruncate() error
 }
 
@@ -85,7 +86,7 @@ type File interface {
 
 	Sync() error
 	GetAppender() FileAppender
-	Replay(ReplayHandle, ReplayObserver) error
+	Replay(*replayer, ReplayObserver) error
 	GetHistory() History
 	TryTruncate(int64) error
 	Load(ver int, groupId uint32, lsn uint64) (entry.Entry, error)
@@ -97,7 +98,7 @@ type Store interface {
 	Replay(ApplyHandle) error
 	GetCheckpointed(uint32) uint64
 	GetSynced(uint32) uint64
-	AppendEntry(entry.Entry) error
+	AppendEntry(entry.Entry) (uint64, error)
 	TryCompact() error
 	TryTruncate(int64) error
 	Load(groupId uint32, lsn uint64) (entry.Entry, error)

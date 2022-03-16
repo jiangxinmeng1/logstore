@@ -160,9 +160,9 @@ func (h *history) TryTruncate() error {
 	return nil
 }
 
-func (h *history) Replay(handle ReplayHandle, observer ReplayObserver) error {
+func (h *history) Replay(r *replayer, observer ReplayObserver) error {
 	for _, entry := range h.entries {
-		err := entry.Replay(handle, observer)
+		err := entry.Replay(r, observer)
 		if err != nil {
 			return err
 		}

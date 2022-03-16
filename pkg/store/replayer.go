@@ -15,10 +15,10 @@ type noopObserver struct {
 func (o *noopObserver) OnNewEntry(_ int) {
 }
 
-func (o *noopObserver) OnNewCommit(*entry.Info)         {}
-func (o *noopObserver) OnNewCheckpoint(*entry.Info) {}
-func (o *noopObserver) OnNewTxn(*entry.Info)               {}
-func (o *noopObserver) OnNewUncommit(addrs []*VFileAddress)   {}
+func (o *noopObserver) OnNewCommit(*entry.Info)             {}
+func (o *noopObserver) OnNewCheckpoint(*entry.Info)         {}
+func (o *noopObserver) OnNewTxn(*entry.Info)                {}
+func (o *noopObserver) OnNewUncommit(addrs []*VFileAddress) {}
 
 type replayer struct {
 	version         int
@@ -29,8 +29,52 @@ type replayer struct {
 	checkpoints     []*replayEntry
 	mergeFuncs      map[uint32]func(pre, curr []byte) []byte
 	applyEntry      ApplyHandle
+
+	//syncbase
+	addrs    map[uint32]map[int]common.ClosedInterval
+	groupLSN map[uint32]uint64
+	synced   map[uint32]uint64
+
+	//vinfo
+	// Commits     map[uint32]*common.ClosedInterval
+	// Checkpoints map[uint32]*common.ClosedIntervals
+	vinfoAddrs map[uint32]map[uint64]int
 }
 
+func (r *replayer) updateVinfoAddrs(groupId uint32, lsn uint64, offset int) {
+	m, ok := r.vinfoAddrs[groupId]
+	if !ok {
+		m = make(map[uint64]int)
+	}
+	m[lsn] = offset
+	r.vinfoAddrs[groupId] = m
+}
+func (r *replayer) updateaddrs(groupId uint32, version int, lsn uint64) {
+	m, ok := r.addrs[groupId]
+	if !ok {
+		m = make(map[int]common.ClosedInterval)
+	}
+	interval, ok := m[version]
+	if !ok {
+		interval = common.ClosedInterval{}
+	}
+	interval.TryMerge(common.ClosedInterval{Start: lsn, End: lsn})
+	m[version] = interval
+	r.addrs[groupId] = m
+}
+func (r *replayer) updateGroupLSN(groupId uint32, lsn uint64) {
+	curr := r.groupLSN[groupId]
+	if lsn > curr {
+		r.groupLSN[groupId] = lsn
+	}
+}
+func (r *replayer) updatesynced(groupId uint32, commitId uint64) {
+	curr := r.synced[groupId]
+	if commitId > curr {
+		r.synced[groupId] = commitId
+	}
+
+}
 func newReplayer(h ApplyHandle) *replayer {
 	return &replayer{
 		uncommit:        make(map[uint32]map[uint64][]*replayEntry),
@@ -39,8 +83,13 @@ func newReplayer(h ApplyHandle) *replayer {
 		checkpoints:     make([]*replayEntry, 0),
 		mergeFuncs:      make(map[uint32]func(pre []byte, curr []byte) []byte),
 		applyEntry:      h,
+		addrs:           make(map[uint32]map[int]common.ClosedInterval),
+		groupLSN:        make(map[uint32]uint64),
+		synced:          make(map[uint32]uint64),
+		vinfoAddrs:      make(map[uint32]map[uint64]int),
 	}
 }
+
 func defaultMergePayload(pre, curr []byte) []byte {
 	return append(pre, curr...)
 }
@@ -100,8 +149,9 @@ type replayEntry struct {
 	payload []byte
 	info    interface{}
 }
-func (r *replayEntry)String()string{
-	return fmt.Sprintf("%v\n",r.info)
+
+func (r *replayEntry) String() string {
+	return fmt.Sprintf("%v\n", r.info)
 }
 func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
 	typ := e.GetType()
@@ -113,11 +163,15 @@ func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
 		infobuf := e.GetInfoBuf()
 		info := &entry.Info{}
 		json.Unmarshal(infobuf, info)
-		info.Info=&VFileAddress{
-			Group: info.Group,
-			LSN: info.GroupLSN,
+		r.updateVinfoAddrs(info.Group,info.GroupLSN,r.state.pos)
+		r.updateaddrs(info.Group, r.version, info.GroupLSN)
+		r.updateGroupLSN(info.Group, info.GroupLSN)
+		r.updatesynced(info.Group, info.CommitId)
+		info.Info = &VFileAddress{
+			Group:   info.Group,
+			LSN:     info.GroupLSN,
 			Version: r.version,
-			Offset: r.state.pos,
+			Offset:  r.state.pos,
 		}
 		replayEty := &replayEntry{
 			entryType: typ,
@@ -144,6 +198,10 @@ func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
 		info := &entry.Info{}
 		// addrs := make([]*VFileAddress, 0)
 		json.Unmarshal(infobuf, &info)
+		r.updateVinfoAddrs(info.Group,info.GroupLSN,r.state.pos)
+		r.updateaddrs(info.Group, r.version, info.GroupLSN)
+		r.updateGroupLSN(info.Group, info.GroupLSN)
+		r.updatesynced(info.Group, info.CommitId)
 		for _, tinfo := range info.Uncommits {
 			tidMap, ok := r.uncommit[tinfo.Group]
 			if !ok {
@@ -167,11 +225,15 @@ func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
 		infobuf := e.GetInfoBuf()
 		info := &entry.Info{}
 		json.Unmarshal(infobuf, info)
-		info.Info=&VFileAddress{
-			Group: info.Group,
-			LSN: info.GroupLSN,
+		r.updateVinfoAddrs(info.Group,info.GroupLSN,r.state.pos)
+		r.updateaddrs(info.Group, r.version, info.GroupLSN)
+		r.updateGroupLSN(info.Group, info.GroupLSN)
+		r.updatesynced(info.Group, info.CommitId)
+		info.Info = &VFileAddress{
+			Group:   info.Group,
+			LSN:     info.GroupLSN,
 			Version: r.version,
-			Offset: r.state.pos,
+			Offset:  r.state.pos,
 		}
 		replayEty := &replayEntry{
 			entryType: e.GetType(),
@@ -188,11 +250,15 @@ func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
 		infobuf := e.GetInfoBuf()
 		info := &entry.Info{}
 		json.Unmarshal(infobuf, info)
-		info.Info=&VFileAddress{
-			Group: info.Group,
-			LSN: info.GroupLSN,
+		r.updateVinfoAddrs(info.Group,info.GroupLSN,r.state.pos)
+		r.updateaddrs(info.Group, r.version, info.GroupLSN)
+		r.updateGroupLSN(info.Group, info.GroupLSN)
+		r.updatesynced(info.Group, info.CommitId)
+		info.Info = &VFileAddress{
+			Group:   info.Group,
+			LSN:     info.GroupLSN,
 			Version: r.version,
-			Offset: r.state.pos,
+			Offset:  r.state.pos,
 		}
 		replayEty := &replayEntry{
 			entryType: e.GetType(),

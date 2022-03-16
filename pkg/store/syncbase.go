@@ -11,6 +11,8 @@ import (
 
 type syncBase struct {
 	*sync.RWMutex
+	groupLSN               map[uint32]uint64
+	lsnmu                  sync.Mutex
 	checkpointing, syncing map[uint32]uint64
 	checkpointed, synced   *syncMap
 	uncommits              map[uint32][]uint64
@@ -31,6 +33,8 @@ func newSyncMap() *syncMap {
 }
 func newSyncBase() *syncBase {
 	return &syncBase{
+		groupLSN:      make(map[uint32]uint64),
+		lsnmu:         sync.Mutex{},
 		checkpointing: make(map[uint32]uint64),
 		syncing:       make(map[uint32]uint64),
 		checkpointed:  newSyncMap(),
@@ -40,7 +44,14 @@ func newSyncBase() *syncBase {
 		addrmu:        sync.RWMutex{},
 	}
 }
-
+func (base *syncBase) OnReplay(r *replayer){
+	base.addrs=r.addrs
+	base.groupLSN=r.groupLSN
+	base.synced.ids=r.synced
+	for groupId,ckps:=range r.checkpointrange{
+		base.checkpointed.ids[groupId]=ckps.Intervals[0].End
+	}
+}
 func (base *syncBase) GetVersionByGLSN(groupId uint32, lsn uint64) (int, error) {
 	base.addrmu.RLock()
 	defer base.addrmu.RUnlock()
@@ -175,4 +186,17 @@ func (base *syncBase) PrepareCommit() *prepareCommit {
 		checkpointing: checkpointing,
 		syncing:       syncing,
 	}
+}
+
+func (base *syncBase) AllocateLsn(groupID uint32) uint64 {
+	base.lsnmu.Lock()
+	defer base.lsnmu.Unlock()
+	lsn, ok := base.groupLSN[groupID]
+	if !ok {
+		base.groupLSN[groupID] = 0
+		return 0
+	}
+	lsn++
+	base.groupLSN[groupID] = lsn
+	return lsn
 }
