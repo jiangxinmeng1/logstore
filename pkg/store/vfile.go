@@ -10,6 +10,7 @@ import (
 	"os"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/jiangxinmeng1/logstore/pkg/common"
 	"github.com/jiangxinmeng1/logstore/pkg/entry"
@@ -180,6 +181,7 @@ func (vf *vFile) Commit() {
 
 //TODO reuse wait sync
 func (vf *vFile) Sync() error {
+	syncTimes++
 	if vf.buf == nil {
 		vf.File.Sync()
 		return nil
@@ -187,7 +189,9 @@ func (vf *vFile) Sync() error {
 	vf.Lock()
 	targetSize := vf.size //TODO race size, bufpos
 	targetpos := vf.bufpos
+	t0 := time.Now()
 	_, err := vf.File.WriteAt(vf.buf[:targetpos], int64(vf.syncpos))
+	writeDuration += time.Since(t0)
 	if err != nil {
 		return err
 	}
@@ -204,7 +208,9 @@ func (vf *vFile) Sync() error {
 	vf.bufpos = 0
 	vf.Unlock()
 	// fmt.Printf("199bufpos is %v\n",vf.bufpos)
+	t0 = time.Now()
 	vf.File.Sync()
+	syncDuration += time.Since(t0)
 	return nil
 }
 
