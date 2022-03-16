@@ -399,8 +399,11 @@ func (bs *baseStore) Close() error {
 	fmt.Printf("flush queue duration %v\nflush loop duration 1 %v\nonEntry duration %v\nflush loop duration 2 %v\nticker %d times\n",
 		flushQueueDuration, flushLoop1Duration, onEntriesDuration, flushLoop2Duration, tickerTimes)
 	fmt.Printf("***********************\n")
-	fmt.Printf("sync %d times(S%dD%d)\nsync duration %v(avg%v)\nwrite durtion %v\nsync queue duration %v\nsync loop duration %v\n",
-		syncTimes, bySize, byDuration, syncDuration, time.Duration(int(syncDuration)/syncTimes), writeDuration, syncQueueDuration, syncLoopDuration)
+	fmt.Printf("sync %d times(S%dD%d)\n", syncTimes, bySize, byDuration)
+	if syncTimes != 0 {
+		fmt.Printf("sync duration %v(avg%v)\nwrite durtion %v\nsync queue duration %v\nsync loop duration %v\n",
+			syncDuration, time.Duration(int(syncDuration)/syncTimes), writeDuration, syncQueueDuration, syncLoopDuration)
+	}
 	return bs.file.Close()
 }
 
