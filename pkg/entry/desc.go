@@ -12,7 +12,7 @@ const (
 	DescriptorSize    = int(unsafe.Sizeof(ETInvalid) + 2*unsafe.Sizeof(uint32(0)))
 )
 
-//type, payloadsize, infosize
+//type u16, payloadsize u32, infosize u32
 type descriptor struct {
 	descBuf []byte
 }

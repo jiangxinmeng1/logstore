@@ -116,8 +116,9 @@ func OpenRotateFile(dir, name string, mu *sync.RWMutex, rotateChecker RotateChec
 				commitCond: *sync.NewCond(new(sync.Mutex)),
 				history:    rf.history,
 				size:       int(f.Size()),
+				syncpos:    int(f.Size()),
 			}
-			vf.vInfo=newVInfo(vf)
+			vf.vInfo = newVInfo(vf)
 			// vf.ReadMeta()
 			vfiles = append(vfiles, vf)
 		}

@@ -1,9 +1,10 @@
 package entry
 
 import (
-	"math/rand"
+	"encoding/binary"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"sync"
 	"time"
@@ -55,6 +56,113 @@ type Info struct {
 	GroupLSN uint64
 
 	Info interface{}
+}
+
+func (info *Info) Marshal() []byte {
+	buf := make([]byte, 128)
+	pos := 0
+	binary.BigEndian.PutUint32(buf[pos:pos+4], info.Group)
+	pos += 4
+	binary.BigEndian.PutUint64(buf[pos:pos+8], info.CommitId)
+	pos += 8
+	binary.BigEndian.PutUint64(buf[pos:pos+8], info.TxnId)
+	pos += 8
+
+	length := uint64(len(info.Checkpoints))
+	binary.BigEndian.PutUint64(buf[pos:pos+8], length)
+	pos += 8
+	for _, ckps := range info.Checkpoints {
+		if len(buf) < pos+12 {
+			buf = append(buf, make([]byte, 128)...)
+		}
+		binary.BigEndian.PutUint32(buf[pos:pos+4], uint32(ckps.Group))
+		pos += 4
+		length := uint64(len(ckps.Ranges.Intervals))
+		binary.BigEndian.PutUint64(buf[pos:pos+8], length)
+		pos += 8
+		for _, interval := range ckps.Ranges.Intervals {
+			if len(buf) < pos+16 {
+				buf = append(buf, make([]byte, 128)...)
+			}
+			binary.BigEndian.PutUint64(buf[pos:pos+8], interval.Start)
+			pos += 8
+			binary.BigEndian.PutUint64(buf[pos:pos+8], interval.End)
+			pos += 8
+		}
+	}
+
+	length = uint64(len(info.Uncommits))
+	if len(buf) < pos+8 {
+		buf = append(buf, make([]byte, 128)...)
+	}
+	binary.BigEndian.PutUint64(buf[pos:pos+8], length)
+	pos += 8
+	for _, tidInfo := range info.Uncommits {
+		if len(buf) < pos+12 {
+			buf = append(buf, make([]byte, 128)...)
+		}
+		binary.BigEndian.PutUint32(buf[pos:pos+4], tidInfo.Group)
+		pos += 4
+		binary.BigEndian.PutUint64(buf[pos:pos+8], tidInfo.Tid)
+		pos += 8
+	}
+
+	if len(buf) < pos+8 {
+		buf = append(buf, make([]byte, 128)...)
+	}
+	binary.BigEndian.PutUint64(buf[pos:pos+8], info.GroupLSN)
+	pos += 8
+
+	buf = buf[:pos]
+	return buf
+}
+func Unmarshal(buf []byte) *Info {
+	info := &Info{}
+	pos := 0
+	info.Group = binary.BigEndian.Uint32(buf[pos : pos+4])
+	pos += 4
+	info.CommitId = binary.BigEndian.Uint64(buf[pos : pos+8])
+	pos += 8
+	info.TxnId = binary.BigEndian.Uint64(buf[pos : pos+8])
+	pos += 8
+
+	length := binary.BigEndian.Uint64(buf[pos : pos+8])
+	pos += 8
+	info.Checkpoints = make([]CkpRanges, 0, length)
+	for i := 0; i < int(length); i++ {
+		ckps := CkpRanges{}
+		ckps.Group = binary.BigEndian.Uint32(buf[pos : pos+4])
+		pos += 4
+		intervalLength := binary.BigEndian.Uint64(buf[pos : pos+8])
+		pos += 8
+		ckps.Ranges = &common.ClosedIntervals{
+			Intervals: make([]*common.ClosedInterval, 0, intervalLength),
+		}
+		for j := 0; j < int(intervalLength); j++ {
+			interval := &common.ClosedInterval{}
+			interval.Start = binary.BigEndian.Uint64(buf[pos : pos+8])
+			pos += 8
+			interval.End = binary.BigEndian.Uint64(buf[pos : pos+8])
+			pos += 8
+			ckps.Ranges.Intervals = append(ckps.Ranges.Intervals, interval)
+		}
+		info.Checkpoints = append(info.Checkpoints, ckps)
+	}
+
+	length = binary.BigEndian.Uint64(buf[pos : pos+8])
+	pos += 8
+	info.Uncommits = make([]Tid, 0, length)
+	for i := 0; i < int(length); i++ {
+		tidInfo := Tid{}
+		tidInfo.Group = binary.BigEndian.Uint32(buf[pos : pos+4])
+		pos += 4
+		tidInfo.Tid = binary.BigEndian.Uint64(buf[pos : pos+8])
+		pos += 8
+		info.Uncommits = append(info.Uncommits, tidInfo)
+	}
+	info.GroupLSN=binary.BigEndian.Uint64(buf[pos : pos+8])
+	pos += 8
+	return info
 }
 
 func (info *Info) ToString() string {
@@ -155,9 +263,9 @@ func (b *Base) GetError() error {
 
 func (b *Base) WaitDone() error {
 	b.wg.Wait()
-	a:=rand.Intn(10000)
-	if a==33{
-		fmt.Printf("entry takes %v \n",b.Duration())
+	a := rand.Intn(10000)
+	if a == 33 {
+		fmt.Printf("entry takes %v \n", b.Duration())
 	}
 	return b.err
 }
