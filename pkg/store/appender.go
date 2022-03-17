@@ -1,8 +1,6 @@
 package store
 
 import (
-	// "fmt"
-
 	"github.com/jiangxinmeng1/logstore/pkg/entry"
 )
 

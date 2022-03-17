@@ -193,8 +193,8 @@ func (base *syncBase) AllocateLsn(groupID uint32) uint64 {
 	defer base.lsnmu.Unlock()
 	lsn, ok := base.groupLSN[groupID]
 	if !ok {
-		base.groupLSN[groupID] = 0
-		return 0
+		base.groupLSN[groupID] = 1
+		return 1
 	}
 	lsn++
 	base.groupLSN[groupID] = lsn

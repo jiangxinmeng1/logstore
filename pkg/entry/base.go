@@ -58,6 +58,7 @@ type Info struct {
 	Info interface{}
 }
 
+//TODO ckp,uncommits==nil
 func (info *Info) Marshal() []byte {
 	buf := make([]byte, 128)
 	pos := 0

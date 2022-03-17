@@ -411,7 +411,7 @@ func (bs *baseStore) Checkpoint(e entry.Entry) (err error) {
 	if e.IsCheckpoint() {
 		return errors.New("wrong entry type")
 	}
-	_, err = bs.AppendEntry(e)
+	_, err = bs.AppendEntry(entry.GTCKp, e)
 	return
 }
 
@@ -423,7 +423,7 @@ func (bs *baseStore) TryTruncate(size int64) error {
 	return bs.file.TryTruncate(size)
 }
 
-func (bs *baseStore) AppendEntry(e entry.Entry) (id uint64, err error) {
+func (bs *baseStore) AppendEntry(groupId uint32, e entry.Entry) (id uint64, err error) {
 	// duration := time.Since(globalTime)
 	// if duration < time.Microsecond*10 {
 	// 	append10µs++
@@ -445,14 +445,20 @@ func (bs *baseStore) AppendEntry(e entry.Entry) (id uint64, err error) {
 		bs.flushWg.Done()
 		return 0, common.ClosedErr
 	}
+	lsn := bs.AllocateLsn(groupId)
 	v1 := e.GetInfo()
-	var lsn uint64
+	var info *entry.Info
 	if v1 != nil {
-		info := v1.(*entry.Info)
-		lsn = bs.AllocateLsn(info.Group)
+		info = v1.(*entry.Info)
+		info.Group=groupId
 		info.GroupLSN = lsn
-		e.SetInfo(info)
+	} else {
+		info = &entry.Info{
+			Group:    groupId,
+			GroupLSN: lsn,
+		}
 	}
+	e.SetInfo(info)
 	bs.flushQueue <- e
 	// globalTime = time.Now()
 	atomic.AddInt32(&enqueueEntries, 1)
@@ -460,7 +466,7 @@ func (bs *baseStore) AppendEntry(e entry.Entry) (id uint64, err error) {
 }
 
 func (s *baseStore) Sync() error {
-	if _, err := s.AppendEntry(FlushEntry); err != nil {
+	if _, err := s.AppendEntry(entry.GTNoop, FlushEntry); err != nil {
 		return err
 	}
 	// if err := s.writer.Flush(); err != nil {

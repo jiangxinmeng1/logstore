@@ -50,6 +50,8 @@ func (r *replayer) updateVinfoAddrs(groupId uint32, lsn uint64, offset int) {
 	r.vinfoAddrs[groupId] = m
 }
 func (r *replayer) updateaddrs(groupId uint32, version int, lsn uint64) {
+	if groupId==entry.GTNoop{
+	}
 	m, ok := r.addrs[groupId]
 	if !ok {
 		m = make(map[int]common.ClosedInterval)
@@ -157,6 +159,11 @@ func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
 	typ := e.GetType()
 	switch typ {
 	case entry.ETFlush:
+		infobuf := e.GetInfoBuf()
+		info := &entry.Info{}
+		json.Unmarshal(infobuf, info)
+		r.updateVinfoAddrs(info.Group,info.GroupLSN,r.state.pos)
+		r.updateaddrs(info.Group, r.version, info.GroupLSN)
 		return nil
 	case entry.ETCheckpoint:
 		// fmt.Printf("ETCheckpoint\n")
