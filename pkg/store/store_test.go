@@ -593,7 +593,7 @@ func TestLoad(t *testing.T) {
 						entry: e,
 						lsn:   lsn,
 					}
-					fmt.Printf("alloc %d-%d\n",entry.GTUncommit,lsn)
+					fmt.Printf("alloc %d-%d\n", entry.GTUncommit, lsn)
 				case 49: //ckp entry
 					e.SetType(entry.ETCheckpoint)
 					end := cidAlloc.Get()
@@ -621,7 +621,7 @@ func TestLoad(t *testing.T) {
 						entry: e,
 						lsn:   lsn,
 					}
-					fmt.Printf("alloc %d-%d\n",entry.GTCKp,lsn)
+					fmt.Printf("alloc %d-%d\n", entry.GTCKp, lsn)
 				case 20, 21, 22, 23: //txn entry
 					e.SetType(entry.ETTxn)
 					txnInfo := &entry.Info{
@@ -641,7 +641,7 @@ func TestLoad(t *testing.T) {
 						entry: e,
 						lsn:   lsn,
 					}
-					fmt.Printf("alloc %d-%d\n",groupNo,lsn)
+					fmt.Printf("alloc %d-%d\n", groupNo, lsn)
 				case 26, 28: //flush entry
 					e.SetType(entry.ETFlush)
 					payload := make([]byte, 0)
@@ -652,7 +652,7 @@ func TestLoad(t *testing.T) {
 						entry: e,
 						lsn:   lsn,
 					}
-					fmt.Printf("alloc %d-%d\n",entry.GTNoop,lsn)
+					fmt.Printf("alloc %d-%d\n", entry.GTNoop, lsn)
 				default: //commit entry
 					e.SetType(entry.ETCustomizedStart)
 					commitInterval := &entry.Info{
@@ -671,7 +671,7 @@ func TestLoad(t *testing.T) {
 						entry: e,
 						lsn:   lsn,
 					}
-					fmt.Printf("alloc %d-%d\n",groupNo,lsn)
+					fmt.Printf("alloc %d-%d\n", groupNo, lsn)
 				}
 				ch <- entrywithlsn
 			}

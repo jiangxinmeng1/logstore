@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -308,10 +307,7 @@ func (bs *baseStore) PrepareEntry(e entry.Entry) (entry.Entry, error) {
 	// 	e.SetInfoBuf(buf)
 	// 	return e, nil
 	default:
-		buf, err := json.Marshal(v)
-		if err != nil {
-			return nil, err
-		}
+		buf:=v.Marshal()
 		size := len(buf)
 		e.SetInfoSize(size)
 		e.SetInfoBuf(buf)

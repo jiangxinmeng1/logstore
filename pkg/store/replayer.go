@@ -1,7 +1,6 @@
 package store
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/jiangxinmeng1/logstore/pkg/common"
@@ -160,16 +159,14 @@ func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
 	switch typ {
 	case entry.ETFlush:
 		infobuf := e.GetInfoBuf()
-		info := &entry.Info{}
-		json.Unmarshal(infobuf, info)
+		info := entry.Unmarshal(infobuf)
 		r.updateVinfoAddrs(info.Group,info.GroupLSN,r.state.pos)
 		r.updateaddrs(info.Group, r.version, info.GroupLSN)
 		return nil
 	case entry.ETCheckpoint:
 		// fmt.Printf("ETCheckpoint\n")
 		infobuf := e.GetInfoBuf()
-		info := &entry.Info{}
-		json.Unmarshal(infobuf, info)
+		info := entry.Unmarshal(infobuf)
 		r.updateVinfoAddrs(info.Group,info.GroupLSN,r.state.pos)
 		r.updateaddrs(info.Group, r.version, info.GroupLSN)
 		r.updateGroupLSN(info.Group, info.GroupLSN)
@@ -202,9 +199,7 @@ func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
 	case entry.ETUncommitted:
 		// fmt.Printf("ETUncommitted\n")
 		infobuf := e.GetInfoBuf()
-		info := &entry.Info{}
-		// addrs := make([]*VFileAddress, 0)
-		json.Unmarshal(infobuf, &info)
+		info := entry.Unmarshal(infobuf)
 		r.updateVinfoAddrs(info.Group,info.GroupLSN,r.state.pos)
 		r.updateaddrs(info.Group, r.version, info.GroupLSN)
 		r.updateGroupLSN(info.Group, info.GroupLSN)
@@ -230,8 +225,7 @@ func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
 	case entry.ETTxn:
 		// fmt.Printf("ETTxn\n")
 		infobuf := e.GetInfoBuf()
-		info := &entry.Info{}
-		json.Unmarshal(infobuf, info)
+		info := entry.Unmarshal(infobuf)
 		r.updateVinfoAddrs(info.Group,info.GroupLSN,r.state.pos)
 		r.updateaddrs(info.Group, r.version, info.GroupLSN)
 		r.updateGroupLSN(info.Group, info.GroupLSN)
@@ -255,8 +249,7 @@ func (r *replayer) onReplayEntry(e entry.Entry, vf ReplayObserver) error {
 	default:
 		// fmt.Printf("default\n")
 		infobuf := e.GetInfoBuf()
-		info := &entry.Info{}
-		json.Unmarshal(infobuf, info)
+		info := entry.Unmarshal(infobuf)
 		r.updateVinfoAddrs(info.Group,info.GroupLSN,r.state.pos)
 		r.updateaddrs(info.Group, r.version, info.GroupLSN)
 		r.updateGroupLSN(info.Group, info.GroupLSN)

@@ -58,7 +58,6 @@ type Info struct {
 	Info interface{}
 }
 
-//TODO ckp,uncommits==nil
 func (info *Info) Marshal() []byte {
 	buf := make([]byte, 128)
 	pos := 0
@@ -78,17 +77,23 @@ func (info *Info) Marshal() []byte {
 		}
 		binary.BigEndian.PutUint32(buf[pos:pos+4], uint32(ckps.Group))
 		pos += 4
-		length := uint64(len(ckps.Ranges.Intervals))
-		binary.BigEndian.PutUint64(buf[pos:pos+8], length)
-		pos += 8
-		for _, interval := range ckps.Ranges.Intervals {
-			if len(buf) < pos+16 {
-				buf = append(buf, make([]byte, 128)...)
+		if ckps.Ranges == nil {
+			length := uint64(0)
+			binary.BigEndian.PutUint64(buf[pos:pos+8], length)
+			pos += 8
+		} else {
+			length := uint64(len(ckps.Ranges.Intervals))
+			binary.BigEndian.PutUint64(buf[pos:pos+8], length)
+			pos += 8
+			for _, interval := range ckps.Ranges.Intervals {
+				if len(buf) < pos+16 {
+					buf = append(buf, make([]byte, 128)...)
+				}
+				binary.BigEndian.PutUint64(buf[pos:pos+8], interval.Start)
+				pos += 8
+				binary.BigEndian.PutUint64(buf[pos:pos+8], interval.End)
+				pos += 8
 			}
-			binary.BigEndian.PutUint64(buf[pos:pos+8], interval.Start)
-			pos += 8
-			binary.BigEndian.PutUint64(buf[pos:pos+8], interval.End)
-			pos += 8
 		}
 	}
 
@@ -161,7 +166,7 @@ func Unmarshal(buf []byte) *Info {
 		pos += 8
 		info.Uncommits = append(info.Uncommits, tidInfo)
 	}
-	info.GroupLSN=binary.BigEndian.Uint64(buf[pos : pos+8])
+	info.GroupLSN = binary.BigEndian.Uint64(buf[pos : pos+8])
 	pos += 8
 	return info
 }
