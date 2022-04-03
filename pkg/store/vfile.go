@@ -42,9 +42,11 @@ type vFile struct {
 	bufpos     int //update when write
 	syncpos    int //update when sync
 	bufSize    int
+
+	bsInfo *storeInfo
 }
 
-func newVFile(mu *sync.RWMutex, name string, version int, history History) (*vFile, error) {
+func newVFile(mu *sync.RWMutex, name string, version int, history History, bsInfo *storeInfo) (*vFile, error) {
 	if mu == nil {
 		mu = new(sync.RWMutex)
 	}
@@ -181,7 +183,9 @@ func (vf *vFile) Commit() {
 
 //TODO reuse wait sync
 func (vf *vFile) Sync() error {
-	syncTimes++
+	if vf.bsInfo != nil {
+		vf.bsInfo.syncTimes++
+	}
 	if vf.buf == nil {
 		vf.File.Sync()
 		return nil
@@ -191,7 +195,10 @@ func (vf *vFile) Sync() error {
 	targetpos := vf.bufpos
 	t0 := time.Now()
 	_, err := vf.File.WriteAt(vf.buf[:targetpos], int64(vf.syncpos))
-	writeDuration += time.Since(t0)
+
+	if vf.bsInfo != nil {
+		vf.bsInfo.writeDuration += time.Since(t0)
+	}
 	if err != nil {
 		return err
 	}
@@ -209,7 +216,10 @@ func (vf *vFile) Sync() error {
 	// fmt.Printf("199bufpos is %v\n",vf.bufpos)
 	t0 = time.Now()
 	vf.File.Sync()
-	syncDuration += time.Since(t0)
+
+	if vf.bsInfo != nil {
+		vf.bsInfo.syncDuration += time.Since(t0)
+	}
 	vf.Unlock()
 	return nil
 }

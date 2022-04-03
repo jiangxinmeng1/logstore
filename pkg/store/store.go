@@ -20,27 +20,6 @@ var (
 	DefaultBatchPerSync  = 100
 	DefaultSyncDuration  = time.Millisecond * 2
 	FlushEntry           entry.Entry
-
-	syncTimes          = 0
-	bySize             = 0
-	byDuration         = 0
-	syncDuration       = time.Second * 0
-	writeDuration      = time.Second * 0
-	syncQueueDuration  = time.Second * 0
-	syncLoopDuration   = time.Second * 0
-	flushQueueDuration = time.Second * 0
-	flushLoop1Duration = time.Second * 0
-	flushLoop2Duration = time.Second * 0
-	onEntriesDuration  = time.Second * 0
-	tickerTimes        = 0
-	enqueueEntries     = int32(0)
-	// appendInterval       = time.Second * 0
-	append10µs  = 0
-	append1ms   = 0
-	append2ms   = 0
-	append3ms   = 0
-	appendgt3ms = 0
-	// globalTime  = time.Now().Unix()
 )
 
 func init() {
@@ -50,7 +29,31 @@ func init() {
 	FlushEntry.Unmarshal(payload)
 }
 
+type storeInfo struct {
+	syncTimes          int
+	bySize             int
+	byDuration         int
+	syncDuration       time.Duration
+	writeDuration      time.Duration
+	syncQueueDuration  time.Duration
+	syncLoopDuration   time.Duration
+	flushQueueDuration time.Duration
+	flushLoop1Duration time.Duration
+	flushLoop2Duration time.Duration
+	onEntriesDuration  time.Duration
+	tickerTimes        int
+	enqueueEntries     int32
+	// appendInterval       = time.Second * 0
+	append10µs  int
+	append1ms   int
+	append2ms   int
+	append3ms   int
+	appendgt3ms int
+	// globalTime  = time.Now().Unix()
+}
+
 type baseStore struct {
+	storeInfo
 	syncBase
 	common.ClosedState
 	dir, name   string
@@ -78,7 +81,7 @@ func NewBaseStore(dir, name string, cfg *StoreCfg) (*baseStore, error) {
 	if cfg == nil {
 		cfg = &StoreCfg{}
 	}
-	bs.file, err = OpenRotateFile(dir, name, nil, cfg.RotateChecker, cfg.HistoryFactory)
+	bs.file, err = OpenRotateFile(dir, name, nil, cfg.RotateChecker, cfg.HistoryFactory, &bs.storeInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -107,35 +110,35 @@ func (bs *baseStore) flushLoop() {
 			return
 		case e := <-bs.flushQueue:
 			entries = append(entries, e)
-			flushQueueDuration += time.Since(t1)
+			bs.flushQueueDuration += time.Since(t1)
 			a := rand.Intn(100)
 			if a == 33 {
-				fmt.Printf("receive takes %v(%d entries appended)\n", time.Since(t1), atomic.LoadInt32(&enqueueEntries))
+				fmt.Printf("receive takes %v(%d entries appended)\n", time.Since(t1), atomic.LoadInt32(&bs.enqueueEntries))
 			}
-			atomic.StoreInt32(&enqueueEntries, 0)
+			atomic.StoreInt32(&bs.enqueueEntries, 0)
 			t1 = time.Now()
 		Left:
 			for i := 0; i < DefaultMaxBatchSize-1; i++ {
 				select {
 				case e = <-bs.flushQueue:
 					entries = append(entries, e)
-					atomic.StoreInt32(&enqueueEntries, 0)
+					atomic.StoreInt32(&bs.enqueueEntries, 0)
 				default:
 					// case <-ticker.C:
 					break Left
 				}
 			}
-			flushLoop1Duration += time.Since(t1)
+			bs.flushLoop1Duration += time.Since(t1)
 			t1 = time.Now()
 			bat := bs.onEntries(entries)
-			onEntriesDuration += time.Since(t1)
+			bs.onEntriesDuration += time.Since(t1)
 			t1 = time.Now()
 			bats = append(bats, bat)
 			if len(bats) >= DefaultBatchPerSync || time.Since(t0) > DefaultSyncDuration {
 				if len(bats) >= DefaultBatchPerSync {
-					bySize++
+					bs.bySize++
 				} else {
-					byDuration++
+					bs.byDuration++
 				}
 				t0 = time.Now()
 				syncBatch := make([]*batch, len(bats))
@@ -149,21 +152,21 @@ func (bs *baseStore) flushLoop() {
 				bats = bats[:0]
 			}
 			entries = entries[:0]
-			flushLoop2Duration += time.Since(t1)
+			bs.flushLoop2Duration += time.Since(t1)
 			t1 = time.Now()
 		case <-ticker.C:
-			tickerTimes++
-			flushQueueDuration += time.Since(t1)
+			bs.tickerTimes++
+			bs.flushQueueDuration += time.Since(t1)
 			t1 = time.Now()
 			if len(bats) != 0 {
-				byDuration++
+				bs.byDuration++
 				t0 = time.Now()
 				syncBatch := make([]*batch, len(bats))
 				copy(syncBatch, bats)
 				bs.syncQueue <- syncBatch
 				bats = bats[:0]
 			}
-			flushLoop2Duration += time.Since(t1)
+			bs.flushLoop2Duration += time.Since(t1)
 			t1 = time.Now()
 		}
 	}
@@ -178,7 +181,7 @@ func (bs *baseStore) syncLoop() {
 		case <-bs.flushCtx.Done():
 			return
 		case e := <-bs.syncQueue:
-			syncQueueDuration += time.Since(t0)
+			bs.syncQueueDuration += time.Since(t0)
 			t0 = time.Now()
 			batches = append(batches, e...)
 			a := rand.Intn(100)
@@ -201,7 +204,7 @@ func (bs *baseStore) syncLoop() {
 					fmt.Printf("sync queue takes %v(including wait)\n", batches[0].entrys[0].Duration())
 				}
 			}
-			syncLoopDuration += time.Since(t0)
+			bs.syncLoopDuration += time.Since(t0)
 			bs.onSyncs(batches)
 			batches = batches[:0]
 		}
@@ -307,7 +310,7 @@ func (bs *baseStore) PrepareEntry(e entry.Entry) (entry.Entry, error) {
 	// 	e.SetInfoBuf(buf)
 	// 	return e, nil
 	default:
-		buf:=v.Marshal()
+		buf := v.Marshal()
 		size := len(buf)
 		e.SetInfoSize(size)
 		e.SetInfoBuf(buf)
@@ -390,15 +393,15 @@ func (bs *baseStore) Close() error {
 	bs.wg.Wait()
 	fmt.Printf("***********************\n")
 	fmt.Printf("%d|10µs|%d|1ms|%d|5ms|%d|10ms|%d\n",
-		append10µs, append1ms, append2ms, append3ms, appendgt3ms)
+		bs.append10µs, bs.append1ms, bs.append2ms, bs.append3ms, bs.appendgt3ms)
 	fmt.Printf("***********************\n")
 	fmt.Printf("flush queue duration %v\nflush loop duration 1 %v\nonEntry duration %v\nflush loop duration 2 %v\nticker %d times\n",
-		flushQueueDuration, flushLoop1Duration, onEntriesDuration, flushLoop2Duration, tickerTimes)
+		bs.flushQueueDuration, bs.flushLoop1Duration, bs.onEntriesDuration, bs.flushLoop2Duration, bs.tickerTimes)
 	fmt.Printf("***********************\n")
-	fmt.Printf("sync %d times(S%dD%d)\n", syncTimes, bySize, byDuration)
-	if syncTimes != 0 {
+	fmt.Printf("sync %d times(S%dD%d)\n", bs.syncTimes, bs.bySize, bs.byDuration)
+	if bs.syncTimes != 0 {
 		fmt.Printf("sync duration %v(avg%v)\nwrite durtion %v\nsync queue duration %v\nsync loop duration %v\n",
-			syncDuration, time.Duration(int(syncDuration)/syncTimes), writeDuration, syncQueueDuration, syncLoopDuration)
+			bs.syncDuration, time.Duration(int(bs.syncDuration)/bs.syncTimes), bs.writeDuration, bs.syncQueueDuration, bs.syncLoopDuration)
 	}
 	return bs.file.Close()
 }
@@ -446,7 +449,7 @@ func (bs *baseStore) AppendEntry(groupId uint32, e entry.Entry) (id uint64, err 
 	var info *entry.Info
 	if v1 != nil {
 		info = v1.(*entry.Info)
-		info.Group=groupId
+		info.Group = groupId
 		info.GroupLSN = lsn
 	} else {
 		info = &entry.Info{
@@ -457,7 +460,7 @@ func (bs *baseStore) AppendEntry(groupId uint32, e entry.Entry) (id uint64, err 
 	e.SetInfo(info)
 	bs.flushQueue <- e
 	// globalTime = time.Now()
-	atomic.AddInt32(&enqueueEntries, 1)
+	atomic.AddInt32(&bs.enqueueEntries, 1)
 	return lsn, nil
 }
 

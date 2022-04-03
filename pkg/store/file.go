@@ -60,10 +60,12 @@ type rotateFile struct {
 	idAlloc common.IdAllocator
 
 	wg sync.WaitGroup
+
+	bsInfo *storeInfo
 }
 
 func OpenRotateFile(dir, name string, mu *sync.RWMutex, rotateChecker RotateChecker,
-	historyFactory HistoryFactory) (*rotateFile, error) {
+	historyFactory HistoryFactory, bsInfo *storeInfo) (*rotateFile, error) {
 	var err error
 	if mu == nil {
 		mu = new(sync.RWMutex)
@@ -92,6 +94,7 @@ func OpenRotateFile(dir, name string, mu *sync.RWMutex, rotateChecker RotateChec
 		checker:     rotateChecker,
 		commitQueue: make(chan *vFile, 10000),
 		history:     historyFactory(),
+		bsInfo:      bsInfo,
 	}
 	if !newDir {
 		files, err := ioutil.ReadDir(dir)
@@ -204,7 +207,7 @@ func (rf *rotateFile) Close() error {
 func (rf *rotateFile) scheduleNew() error {
 	fname := MakeVersionFile(rf.dir, rf.name, rf.nextVer)
 	rf.nextVer++
-	vf, err := newVFile(nil, fname, int(rf.nextVer), rf.history)
+	vf, err := newVFile(nil, fname, int(rf.nextVer), rf.history,rf.bsInfo)
 	if err != nil {
 		return err
 	}

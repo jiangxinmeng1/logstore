@@ -20,7 +20,7 @@ func TestVFile(t *testing.T) {
 	os.RemoveAll(dir)
 	name := "mock"
 	os.MkdirAll(dir, 0755)
-	v0, err := newVFile(nil, MakeVersionFile(dir, name, 0), 0, nil)
+	v0, err := newVFile(nil, MakeVersionFile(dir, name, 0), 0, nil, nil)
 	assert.Nil(t, err)
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -59,7 +59,7 @@ func TestAppender(t *testing.T) {
 	checker := &MaxSizeRotateChecker{
 		MaxSize: int(common.M) * 1,
 	}
-	rf, err := OpenRotateFile(dir, name, nil, checker, nil)
+	rf, err := OpenRotateFile(dir, name, nil, checker, nil, nil)
 	assert.Nil(t, err)
 	defer rf.Close()
 
@@ -180,7 +180,7 @@ func TestReadVInfo(t *testing.T) {
 	checker := &MaxSizeRotateChecker{
 		MaxSize: int(common.M) * 1,
 	}
-	rf, _ := OpenRotateFile(dir, name, nil, checker, nil)
+	rf, _ := OpenRotateFile(dir, name, nil, checker, nil, nil)
 
 	var data bytes.Buffer
 	data.WriteString("helloworldhello1")
@@ -239,6 +239,6 @@ func TestReadVInfo(t *testing.T) {
 
 	rf.Close()
 
-	rf, _ = OpenRotateFile(dir, name, nil, checker, nil)
+	rf, _ = OpenRotateFile(dir, name, nil, checker, nil, nil)
 	rf.Close()
 }
