@@ -102,7 +102,13 @@ func (intervals *ClosedIntervals) ContainsInterval(oIntervals ClosedInterval) bo
 	}
 	return contains
 }
-
+func (intervals *ClosedIntervals)String()string{
+	s:=""
+	for _,interval:=range intervals.Intervals{
+		s=fmt.Sprintf("%s%s",s,interval.String())
+	}
+	return s
+}
 //for test
 func (intervals *ClosedIntervals) Equal(o *ClosedIntervals) bool {
 	if len(intervals.Intervals) != len(o.Intervals) {

@@ -1,7 +1,7 @@
 package store
 
 import (
-	"github.com/jiangxinmeng1/logstore/pkg/common"
+	// "github.com/jiangxinmeng1/logstore/pkg/common"
 	"github.com/jiangxinmeng1/logstore/pkg/entry"
 	"io"
 	"sync"
@@ -25,14 +25,18 @@ type VFile interface {
 	Id() int
 	Name() string
 	String() string
-	InCheckpoint(map[uint32]*common.ClosedIntervals) bool
-	InCommits(map[uint32]*common.ClosedIntervals) bool
-	InTxnCommits(map[uint32]map[uint64]uint64, map[uint32]*common.ClosedIntervals) bool
-	MergeCheckpoint(map[uint32]*common.ClosedIntervals)
-	MergeTidCidMap(map[uint32]map[uint64]uint64)
+
+	IsToDelete(c *compactor) (toDelete bool)
+	// InCheckpoint(map[uint32]*common.ClosedIntervals) bool
+	// InCommits(map[uint32]*common.ClosedIntervals) bool
+	// InTxnCommits(map[uint32]map[uint64]uint64, map[uint32]*common.ClosedIntervals) bool
+	// MergeCheckpoint(map[uint32]*common.ClosedIntervals)
+	// MergeTidCidMap(map[uint32]map[uint64]uint64)
 	Replay(*replayer, ReplayObserver) error
+
 	Load(groupId uint32, lsn uint64) (entry.Entry, error)
 	LoadMeta() error
+	
 	FreeMeta()
 	OnReplay(r *replayer)
 }
