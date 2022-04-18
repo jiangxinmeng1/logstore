@@ -131,14 +131,21 @@ func (info *vInfo) MetatoBuf() []byte {
 	buf, _ := json.Marshal(info)
 	return buf
 }
+func (info *vInfo) PrepareCompactor(c *compactor) {
+	for _, g := range info.groups {
+		g.PrepareMerge(c)
+	}
+}
 func (info *vInfo) IsToDelete(c *compactor) (toDelete bool) {
 	toDelete = true
 	for _, g := range info.groups {
 		if g.IsCheckpointGroup() {
+			// fmt.Printf("not covered\ntcmap:%v\nckp%v\ng:%v\n",c.tidCidMap,c.gIntervals,g)
 			toDelete = false
 		}
 		if g.IsCommitGroup() {
 			if !g.IsCovered(c) {
+				// fmt.Printf("not covered\ntcmap:%v\nckp%v\ng:%v\n",c.tidCidMap,c.gIntervals,g)
 				toDelete = false
 			}
 		}
@@ -271,7 +278,7 @@ func (info *vInfo) Log(v interface{}) error {
 func (info *vInfo) LogUncommitInfo(entryInfo *entry.Info) error {
 	g, ok := info.groups[entryInfo.Group]
 	if !ok {
-		g = newuncommitGroup(info,entryInfo.Group)
+		g = newuncommitGroup(info, entryInfo.Group)
 	}
 	g.Log(entryInfo)
 	info.groups[entryInfo.Group] = g
@@ -281,7 +288,7 @@ func (info *vInfo) LogUncommitInfo(entryInfo *entry.Info) error {
 func (info *vInfo) LogCommit(entryInfo *entry.Info) error {
 	g, ok := info.groups[entryInfo.Group]
 	if !ok {
-		g = newcommitGroup(info,entryInfo.Group)
+		g = newcommitGroup(info, entryInfo.Group)
 	}
 	err := g.Log(entryInfo)
 	if err != nil {
@@ -294,7 +301,7 @@ func (info *vInfo) LogCommit(entryInfo *entry.Info) error {
 func (info *vInfo) LogCheckpoint(entryInfo *entry.Info) error {
 	g, ok := info.groups[entryInfo.Group]
 	if !ok {
-		g = newcheckpointGroup(info,entryInfo.Group)
+		g = newcheckpointGroup(info, entryInfo.Group)
 	}
 	g.Log(entryInfo)
 	info.groups[entryInfo.Group] = g

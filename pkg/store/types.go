@@ -27,6 +27,7 @@ type VFile interface {
 	String() string
 
 	IsToDelete(c *compactor) (toDelete bool)
+	PrepareCompactor(c *compactor)
 	// InCheckpoint(map[uint32]*common.ClosedIntervals) bool
 	// InCommits(map[uint32]*common.ClosedIntervals) bool
 	// InTxnCommits(map[uint32]map[uint64]uint64, map[uint32]*common.ClosedIntervals) bool

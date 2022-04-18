@@ -161,6 +161,107 @@ func TestStore(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+func TestPartialCkp(t *testing.T) {
+	dir := "/tmp/logstore/teststore"
+	name := "mock"
+	os.RemoveAll(dir)
+	cfg := &StoreCfg{
+		RotateChecker: NewMaxSizeRotateChecker(int(common.K) * 2),
+	}
+	s, err := NewBaseStore(dir, name, cfg)
+	assert.Nil(t, err)
+
+	var bs bytes.Buffer
+	for i := 0; i < 300; i++ {
+		bs.WriteString("helloyou")
+	}
+	buf := bs.Bytes()
+
+	uncommit := entry.GetBase()
+	uncommitInfo := &entry.Info{
+		Group: entry.GTUncommit,
+		Uncommits: []entry.Tid{{
+			Group: entry.GTCustomizedStart,
+			Tid:   1,
+		}},
+	}
+	uncommit.SetInfo(uncommitInfo)
+	buf2 := make([]byte, common.K)
+	copy(buf2, buf)
+	uncommit.Unmarshal(buf2)
+	lsn, err := s.AppendEntry(entry.GTUncommit, uncommit)
+	assert.Nil(t, err)
+	uncommit.WaitDone()
+	_, err = s.Load(entry.GTUncommit, lsn)
+	assert.Nil(t, err)
+
+	commit := entry.GetBase()
+	commitInfo := &entry.Info{
+		Group:    entry.GTCustomizedStart,
+		CommitId: 1,
+		TxnId:    1,
+	}
+	commit.SetInfo(commitInfo)
+	buf2 = make([]byte, common.K)
+	copy(buf2, buf)
+	commit.Unmarshal(buf2)
+	s.AppendEntry(entry.GTCustomizedStart, commit)
+
+	ckp1 := entry.GetBase()
+	checkpointInfo := &entry.Info{
+		Group: entry.GTCKp,
+		Checkpoints: []entry.CkpRanges{{
+			Group: entry.GTCustomizedStart,
+			Command: []entry.CommandInfo{{
+				Tid:        1,
+				CommandIds: []uint32{0},
+				Size:       2,
+			}},
+		}},
+	}
+	ckp1.SetInfo(checkpointInfo)
+	buf2 = make([]byte, common.K)
+	copy(buf2, buf)
+	ckp1.Unmarshal(buf2)
+	s.AppendEntry(entry.GTCKp, ckp1)
+
+	ckp2 := entry.GetBase()
+	checkpointInfo2 := &entry.Info{
+		Group: entry.GTCKp,
+		Checkpoints: []entry.CkpRanges{{
+			Group: entry.GTCustomizedStart,
+			Command: []entry.CommandInfo{{
+				Tid:        1,
+				CommandIds: []uint32{1},
+				Size:       2,
+			}},
+		}},
+	}
+	ckp2.SetInfo(checkpointInfo2)
+	buf2 = make([]byte, common.K)
+	copy(buf2, buf)
+	ckp2.Unmarshal(buf2)
+	s.AppendEntry(entry.GTCKp, ckp2)
+
+	anotherEntry := entry.GetBase()
+	commitInfo = &entry.Info{
+		Group:    entry.GTCustomizedStart + 1,
+		CommitId: 1,
+	}
+	anotherEntry.SetInfo(commitInfo)
+	buf2 = make([]byte, common.K)
+	copy(buf2, buf)
+	anotherEntry.Unmarshal(buf2)
+	s.AppendEntry(entry.GTCustomizedStart, anotherEntry)
+	anotherEntry.WaitDone()
+
+	s.TryCompact()
+	_, err = s.Load(entry.GTUncommit, lsn)
+	assert.NotNil(t, err)
+
+	s.Close()
+}
+
 func TestReplay(t *testing.T) {
 	dir := "/tmp/logstore/teststore"
 	name := "mock"

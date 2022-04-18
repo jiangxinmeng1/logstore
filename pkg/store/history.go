@@ -137,6 +137,10 @@ func (h *history) TryTruncate() error {
 	h.mu.RUnlock()
 	for i := len(entries) - 1; i >= 0; i-- {
 		e := entries[i]
+		e.PrepareCompactor(c)
+	}
+	for i := len(entries) - 1; i >= 0; i-- {
+		e := entries[i]
 		e.LoadMeta()
 		wrapper := entryWrapper{entry: e}
 		if e.IsToDelete(c) {

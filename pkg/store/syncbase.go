@@ -44,12 +44,12 @@ func newSyncBase() *syncBase {
 		addrmu:        sync.RWMutex{},
 	}
 }
-func (base *syncBase) OnReplay(r *replayer){
-	base.addrs=r.addrs
-	base.groupLSN=r.groupLSN
-	base.synced.ids=r.synced
-	for groupId,ckps:=range r.checkpointrange{
-		base.checkpointed.ids[groupId]=ckps.Intervals[0].End
+func (base *syncBase) OnReplay(r *replayer) {
+	base.addrs = r.addrs
+	base.groupLSN = r.groupLSN
+	base.synced.ids = r.synced
+	for groupId, ckps := range r.checkpointrange {
+		base.checkpointed.ids[groupId] = ckps.Intervals[0].End
 	}
 }
 func (base *syncBase) GetVersionByGLSN(groupId uint32, lsn uint64) (int, error) {
@@ -83,7 +83,9 @@ func (base *syncBase) OnEntryReceived(e entry.Entry) error {
 		switch v.Group {
 		case entry.GTCKp:
 			for _, intervals := range v.Checkpoints {
-				base.checkpointing[intervals.Group] = intervals.Ranges.Intervals[0].End //TODO calculate the first range
+				if intervals.Ranges != nil && len(intervals.Ranges.Intervals) > 0 {
+					base.checkpointing[intervals.Group] = intervals.Ranges.Intervals[0].End
+				}
 			}
 		case entry.GTUncommit:
 			// addr := v.Addr.(*VFileAddress)

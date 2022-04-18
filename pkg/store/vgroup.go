@@ -8,12 +8,12 @@ import (
 	"github.com/jiangxinmeng1/logstore/pkg/entry"
 )
 
-
 type VGroup interface { //append(vfile) ckp(by what) compact/iscovered
 	Log(interface{}) error
 	OnCheckpoint(interface{}) //ckp info
 	IsCovered(c *compactor) bool
 	MergeCheckpointInfo(c *compactor) //only commit group
+	PrepareMerge(c *compactor)
 
 	IsCheckpointGroup() bool
 	IsUncommitGroup() bool
@@ -28,12 +28,14 @@ type compactor struct {
 	//ckp ranges
 	gIntervals map[uint32]*common.ClosedIntervals
 	tidCidMap  map[uint32]map[uint64]uint64
+	partialCKP map[uint32]map[uint64]*partialCkpInfo
 }
 
-func newCompactor()*compactor{
+func newCompactor() *compactor {
 	return &compactor{
 		gIntervals: make(map[uint32]*common.ClosedIntervals),
-		tidCidMap: make(map[uint32]map[uint64]uint64),
+		tidCidMap:  make(map[uint32]map[uint64]uint64),
+		partialCKP: make(map[uint32]map[uint64]*partialCkpInfo),
 	}
 }
 
@@ -46,13 +48,14 @@ type baseGroup struct {
 
 func newbaseGroup(v *vInfo, gid uint32) *baseGroup {
 	return &baseGroup{
-		vInfo: v,
+		vInfo:   v,
 		groupId: gid,
 	}
 }
 func (g *baseGroup) IsCovered(c *compactor)           {}
 func (g *baseGroup) MergeCheckpointInfo(c *compactor) {}
 func (g *baseGroup) String() string                   { return "" }
+func (g *baseGroup) PrepareMerge(c *compactor)        {}
 
 type commitGroup struct {
 	*baseGroup
@@ -78,9 +81,9 @@ func newPartialCkpInfo() *partialCkpInfo {
 // uncommit -> commit -> partitial ckp -> ckp
 // log uncommit group -> commit group tid cid map -> partitial ckp entry -> calculate when compact
 // log tid only | offset/size
-func newcommitGroup(v *vInfo,gid uint32) *commitGroup {
+func newcommitGroup(v *vInfo, gid uint32) *commitGroup {
 	return &commitGroup{
-		baseGroup: newbaseGroup(v,gid),
+		baseGroup: newbaseGroup(v, gid),
 		ckps:      common.NewClosedIntervals(),
 		// Commits:,
 		tidCidMap:  make(map[uint64]uint64),
@@ -116,7 +119,7 @@ func (g *commitGroup) IsCovered(c *compactor) bool {
 	if !ok {
 		return false
 	}
-	if g.Commits!=nil&&!interval.ContainsInterval(*g.Commits) {
+	if g.Commits != nil && !interval.ContainsInterval(*g.Commits) {
 		return false
 	}
 	return interval.Contains(*g.ckps)
@@ -125,8 +128,7 @@ func (g *commitGroup) IsCovered(c *compactor) bool {
 func (g *commitGroup) IsCommitGroup() bool {
 	return true
 }
-
-func (g *commitGroup) MergeCheckpointInfo(c *compactor) {
+func (g *commitGroup) PrepareMerge(c *compactor) {
 	//tid cid map
 	gMap, ok := c.tidCidMap[g.groupId]
 	if !ok {
@@ -136,13 +138,31 @@ func (g *commitGroup) MergeCheckpointInfo(c *compactor) {
 		gMap[tid] = cid
 	}
 	c.tidCidMap[g.groupId] = gMap
+}
+func (g *commitGroup) MergeCheckpointInfo(c *compactor) {
 	//merge partialckp
-	for tid, commandsInfo := range g.partialCkp {
-		if commandsInfo.ckps.GetCardinality() == uint64(commandsInfo.size) {
-			g.ckps.TryMerge(*common.NewClosedIntervalsByInt(tid))
-			delete(g.partialCkp, tid)
-		}
+	partialMap, ok := c.partialCKP[g.groupId]
+	if !ok {
+		partialMap = make(map[uint64]*partialCkpInfo)
 	}
+	gMap := c.tidCidMap[g.groupId]
+	for tid, commandsInfo := range g.partialCkp {
+		partial, ok := partialMap[tid]
+		if !ok {
+			partial = newPartialCkpInfo()
+		}
+		partial.size = commandsInfo.size
+		partial.ckps.Or(commandsInfo.ckps)
+		if partial.ckps.GetCardinality() == uint64(partial.size) {
+			if gMap != nil {
+				cid := gMap[tid]
+				g.ckps.TryMerge(*common.NewClosedIntervalsByInt(cid))
+				delete(partialMap, tid)
+			}
+		}
+		partialMap[tid] = partial
+	}
+	c.partialCKP[g.groupId] = partialMap
 	//merge ckps
 	if len(g.ckps.Intervals) == 0 {
 		return
@@ -168,7 +188,9 @@ func (g *commitGroup) IsUncommitGroup() bool {
 }
 func (g *commitGroup) OnCheckpoint(info interface{}) {
 	ranges := info.(*entry.CkpRanges)
-	g.ckps.TryMerge(*ranges.Ranges)
+	if ranges.Ranges != nil {
+		g.ckps.TryMerge(*ranges.Ranges)
+	}
 	for _, command := range ranges.Command {
 		commandinfo, ok := g.partialCkp[command.Tid]
 		if !ok {
@@ -188,9 +210,9 @@ type uncommitGroup struct {
 	UncommitTxn map[uint32][]uint64
 }
 
-func newuncommitGroup(v *vInfo,gid uint32) *uncommitGroup {
+func newuncommitGroup(v *vInfo, gid uint32) *uncommitGroup {
 	return &uncommitGroup{
-		baseGroup:   newbaseGroup(v,gid),
+		baseGroup:   newbaseGroup(v, gid),
 		UncommitTxn: make(map[uint32][]uint64),
 	}
 }
@@ -266,14 +288,14 @@ type checkpointGroup struct {
 	*baseGroup
 }
 
-func newcheckpointGroup(v *vInfo,gid uint32) *checkpointGroup {
+func newcheckpointGroup(v *vInfo, gid uint32) *checkpointGroup {
 	return &checkpointGroup{
-		baseGroup: newbaseGroup(v,gid),
+		baseGroup: newbaseGroup(v, gid),
 	}
 }
-func (g *checkpointGroup) OnCheckpoint(interface{})         {  } //ckp info
+func (g *checkpointGroup) OnCheckpoint(interface{})         {} //ckp info
 func (g *checkpointGroup) IsCovered(c *compactor) bool      { return false }
-func (g *checkpointGroup) MergeCheckpointInfo(c *compactor) { }
+func (g *checkpointGroup) MergeCheckpointInfo(c *compactor) {}
 func (g *checkpointGroup) IsCheckpointGroup() bool {
 	return true
 }
@@ -287,7 +309,7 @@ func (g *checkpointGroup) Log(info interface{}) error {
 	for _, interval := range checkpointInfo.Checkpoints {
 		group := g.vInfo.getGroupById(interval.Group) //todo new group if not exist
 		if group == nil {
-			group = newcommitGroup(g.vInfo,interval.Group)
+			group = newcommitGroup(g.vInfo, interval.Group)
 			g.vInfo.groups[interval.Group] = group
 		}
 		group.OnCheckpoint(&interval) //todo range -> ckp info
